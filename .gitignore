@@ -28,3 +28,16 @@ landing/
 .antigravitycli/
 .playwright-mcp/
 /.brand-tmp/
+
+# Open Design scratch artifacts (one-shot generations land at repo root)
+/.od-skills/
+/dokpilot-ui.html
+/dokpilot-ui.html.artifact.json
+/mpjsy0ar-image.png
+
+# ui-server runtime — log lives in ~/.claude/skills/dokpilot/ but
+# during dev the symlink can resolve into the repo; never commit it
+skills/dokpilot/ui-server.log
+skills/dokpilot/.ui-pid
+skills/dokpilot/.ui-port
+skills/dokpilot/.ui-url

@@ -1,0 +1,11 @@
+{
+  "name": "dokpilot-ui-server",
+  "version": "0.1.0",
+  "description": "Dokpilot dashboard UI server (CommonJS — overrides parent mcp-server ESM mode)",
+  "type": "commonjs",
+  "private": true,
+  "main": "server.js",
+  "engines": {
+    "node": ">=20"
+  }
+}

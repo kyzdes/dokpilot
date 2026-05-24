@@ -1,0 +1,238 @@
+<!doctype html>
+<html lang="en" data-mode="simple" data-sidebar="expanded">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dokpilot · Deploy</title>
+<meta name="robots" content="noindex,nofollow">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@400;450;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/app.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 32 32%22><rect width=%2232%22 height=%2232%22 rx=%226%22 fill=%22%2339ff14%22/></svg>">
+</head>
+<body>
+<div class="layout" data-page="deploy">
+  <aside class="sidebar" data-static>
+    <div class="sb-brand">
+      <button class="sb-glyph" title="Toggle sidebar">d</button>
+      <span class="sb-word">dokpilot</span>
+      <span class="sb-ver">v4.0.0</span>
+    </div>
+    <nav class="sb-nav">
+      <a class="nav-item" href="index.html" title="Overview"><span class="icon" aria-hidden="true"><svg viewBox='0 0 24 24' width='17' height='17' fill='none' stroke='currentColor' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'><path d='M3 11l9-8 9 8'/><path d='M5 10v10h14V10'/></svg></span><span class="nav-label"><span data-adv>Overview</span><span data-simple>Home</span></span></a>
+      <a class="nav-item" href="projects.html" title="Projects"><span class="icon" aria-hidden="true"><svg viewBox='0 0 24 24' width='17' height='17' fill='none' stroke='currentColor' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'><rect x='3' y='3' width='7' height='7' rx='1.5'/><rect x='14' y='3' width='7' height='7' rx='1.5'/><rect x='3' y='14' width='7' height='7' rx='1.5'/><rect x='14' y='14' width='7' height='7' rx='1.5'/></svg></span><span class="nav-label"><span data-adv>Projects</span><span data-simple>My apps</span></span></a>
+      <a class="nav-item active" href="deploy.html" title="Deploy"><span class="icon" aria-hidden="true"><svg viewBox='0 0 24 24' width='17' height='17' fill='none' stroke='currentColor' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'><path d='M12 4l4 4-4 4'/><path d='M4 12h12'/><path d='M4 20l4-4-4-4'/></svg></span><span class="nav-label"><span data-adv>Deploy</span><span data-simple>Deploy</span></span><span class="nav-badge dot-only" title="1 deploy in flight"></span></a>
+      <a class="nav-item" href="logs.html" title="Logs & builds"><span class="icon" aria-hidden="true"><svg viewBox='0 0 24 24' width='17' height='17' fill='none' stroke='currentColor' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'><polyline points='22 12 18 12 15 21 9 3 6 12 2 12'/></svg></span><span class="nav-label"><span data-adv>Logs & builds</span><span data-simple>Activity</span></span></a>
+      <a class="nav-item" href="domains.html" title="Domains & DNS"><span class="icon" aria-hidden="true"><svg viewBox='0 0 24 24' width='17' height='17' fill='none' stroke='currentColor' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'><circle cx='12' cy='12' r='9'/><path d='M3 12h18'/><path d='M12 3a15 15 0 0 1 0 18 15 15 0 0 1 0-18'/></svg></span><span class="nav-label"><span data-adv>Domains & DNS</span><span data-simple>Domains</span></span></a>
+      <div class="nav-group-label" data-adv>Infrastructure</div>
+      <a class="nav-item" href="servers.html" data-adv title="Servers"><span class="icon" aria-hidden="true"><svg viewBox='0 0 24 24' width='17' height='17' fill='none' stroke='currentColor' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'><rect x='3' y='4' width='18' height='7' rx='1.5'/><rect x='3' y='13' width='18' height='7' rx='1.5'/><circle cx='6.5' cy='7.5' r='.7' fill='currentColor'/><circle cx='6.5' cy='16.5' r='.7' fill='currentColor'/></svg></span><span class="nav-label"><span data-adv>Servers</span><span data-simple>Servers</span></span></a>
+      <a class="nav-item" href="databases.html" data-adv title="Databases"><span class="icon" aria-hidden="true"><svg viewBox='0 0 24 24' width='17' height='17' fill='none' stroke='currentColor' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'><ellipse cx='12' cy='5' rx='8' ry='3'/><path d='M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5'/><path d='M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6'/></svg></span><span class="nav-label"><span data-adv>Databases</span><span data-simple>Databases</span></span></a>
+      <a class="nav-item" href="assistant.html" title="Claude console"><span class="icon" aria-hidden="true"><svg viewBox='0 0 24 24' width='17' height='17' fill='none' stroke='currentColor' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'><path d='M12 3v4M12 17v4M3 12h4M17 12h4'/><path d='M12 8a4 4 0 0 0 4 4 4 4 0 0 0-4 4 4 4 0 0 0-4-4 4 4 0 0 0 4-4z'/></svg></span><span class="nav-label"><span data-adv>Claude console</span><span data-simple>Ask Claude</span></span></a>
+    </nav>
+    <div class="sb-foot">
+      <a class="nav-item" href="settings.html" title="Settings"><span class="icon" aria-hidden="true"><svg viewBox='0 0 24 24' width='17' height='17' fill='none' stroke='currentColor' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'><circle cx='12' cy='12' r='3'/><path d='M19.4 13.5a1.7 1.7 0 0 0 .3 1.9 2 2 0 1 1-2.3 3.1 1.7 1.7 0 0 0-2.8 1.1 2 2 0 1 1-4 0 1.7 1.7 0 0 0-2.8-1.1 2 2 0 1 1-2.3-3.1 1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1 2 2 0 1 1 0-3 1.7 1.7 0 0 0 1.5-1 1.7 1.7 0 0 0-.3-1.9 2 2 0 1 1 2.3-3.1 1.7 1.7 0 0 0 2.8-1.1 2 2 0 1 1 4 0 1.7 1.7 0 0 0 2.8 1.1 2 2 0 1 1 2.3 3.1 1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.5 1 2 2 0 1 1 0 3 1.7 1.7 0 0 0-1.5 1z'/></svg></span><span class="nav-label">Settings</span></a>
+    </div>
+  </aside>
+  <div class="content">
+    <header class="topbar" data-static>
+      <div class="topbar-title">
+        <span class="topbar-crumb">dokpilot / deploy</span>
+        <h1 class="topbar-h"><span data-adv>Deploy</span><span data-simple>Deploy something</span></h1>
+      </div>
+      <button class="cmdk" aria-label="Search or ask Claude"><span class="icon" aria-hidden="true"><svg viewBox='0 0 24 24' width='14' height='14' fill='none' stroke='currentColor' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'><circle cx='11' cy='11' r='7'/><line x1='21' y1='21' x2='16.5' y2='16.5'/></svg></span><span>Search or ask Claude…</span><span class="cmdk-hint">⌘K</span></button>
+      <div class="topbar-right">
+        <div class="mode-toggle" role="group" aria-label="Interface mode">
+          <button class="mode-opt" data-mode="simple" aria-pressed="true" title="Fewer controls, plain language — great for quick deploys"><span class="icon" aria-hidden="true"><svg viewBox='0 0 24 24' width='13' height='13' fill='none' stroke='currentColor' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'><path d='M3 11l9-8 9 8'/><path d='M5 10v10h14V10'/></svg></span><span class="mode-txt">Simple</span></button>
+          <button class="mode-opt" data-mode="advanced" aria-pressed="false" title="Full operator density — servers, DNS records, raw env, SSH"><span class="icon" aria-hidden="true"><svg viewBox='0 0 24 24' width='13' height='13' fill='none' stroke='currentColor' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'><circle cx='12' cy='12' r='3'/><path d='M19.4 13.5a1.7 1.7 0 0 0 .3 1.9 2 2 0 1 1-2.3 3.1 1.7 1.7 0 0 0-2.8 1.1 2 2 0 1 1-4 0 1.7 1.7 0 0 0-2.8-1.1 2 2 0 1 1-2.3-3.1 1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1 2 2 0 1 1 0-3 1.7 1.7 0 0 0 1.5-1 1.7 1.7 0 0 0-.3-1.9 2 2 0 1 1 2.3-3.1 1.7 1.7 0 0 0 2.8-1.1 2 2 0 1 1 4 0 1.7 1.7 0 0 0 2.8 1.1 2 2 0 1 1 2.3 3.1 1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.5 1 2 2 0 1 1 0 3 1.7 1.7 0 0 0-1.5 1z'/></svg></span><span class="mode-txt">Advanced</span></button>
+        </div>
+        <span class="meta-chip hide-sm" data-adv title="Local listen address"><span class="icon" aria-hidden="true"><svg viewBox='0 0 24 24' width='11' height='11' fill='none' stroke='currentColor' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'><rect x='5' y='11' width='14' height='10' rx='2'/><path d='M8 11V7a4 4 0 0 1 8 0v4'/></svg></span>127.0.0.1:52114</span>
+        <button class="icon-btn" title="Refresh"><span class="icon" aria-hidden="true"><svg viewBox='0 0 24 24' width='16' height='16' fill='none' stroke='currentColor' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'><path d='M21 12a9 9 0 1 1-3-6.7L21 8'/><path d='M21 3v5h-5'/></svg></span></button>
+      </div>
+    </header>
+    <main class="main">
+
+      <div class="page-intro">
+        <div class="grow">
+          <p class="page-lead">
+            <span data-adv="">Paste a repo, pick a server, and watch the five-step pipeline run. Claude pauses only for the answers it can't infer.</span>
+            <span data-simple="">Three steps: paste your link, choose where it lives, deploy. Claude handles the technical parts.</span>
+          </p>
+        </div>
+      </div>
+
+      <section class="card card-pad mb-4">
+        <div class="stepper" id="stepper" data-fallback=""><div class="step step-active"><span class="step-num">1</span><div class="step-body"><span class="step-label">Paste link</span><span class="step-meta">in progress</span></div></div><div class="step-conn"></div><div class="step step-pending"><span class="step-num">2</span><div class="step-body"><span class="step-label">Choose home</span><span class="step-meta"></span></div></div><div class="step-conn"></div><div class="step step-pending"><span class="step-num">3</span><div class="step-body"><span class="step-label">Deploy</span><span class="step-meta"></span></div></div></div>
+      </section>
+
+      <div id="wizard" data-fallback=""><section class="card card-pad stack"><div class="field"><label><span data-adv="">Repository</span><span data-simple="">Your GitHub link</span></label><div class="input-group"><input class="input mono" id="repo" placeholder="github.com/your-name/your-app" value="github.com/kyzdes/notes-app"><button class="ask-claude" data-claude="default" type="button" style="height: 40px;"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v4M12 17v4M3 12h4M17 12h4"></path><path d="M12 8a4 4 0 0 0 4 4 4 4 0 0 0-4 4 4 4 0 0 0-4-4 4 4 0 0 0 4-4z"></path></svg></span>Pick for me</button></div><div class="hint" data-simple="">Public or private — Dokpilot connects with your saved GitHub access.</div></div><div class="field"><label><span data-adv="">Target server</span><span data-simple="">Where should it live?</span></label><div class="md-list" style="flex-flow: wrap;"><button class="md-item active" type="button"><div class="md-name"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="7" rx="1.5"></rect><rect x="3" y="13" width="18" height="7" rx="1.5"></rect><circle cx="6.5" cy="7.5" r=".7" fill="currentColor"></circle><circle cx="6.5" cy="16.5" r=".7" fill="currentColor"></circle></svg></span>main<span class="tag-mini">recommended</span></div><div class="md-sub"><span data-adv="">77.90.43.8 · dokploy v0.29.5 · 34% cpu</span><span data-simple="">Frankfurt · Hetzner · plenty of room</span></div></button><button class="md-item" type="button"><div class="md-name"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="7" rx="1.5"></rect><rect x="3" y="13" width="18" height="7" rx="1.5"></rect><circle cx="6.5" cy="7.5" r=".7" fill="currentColor"></circle><circle cx="6.5" cy="16.5" r=".7" fill="currentColor"></circle></svg></span>edge</div><div class="md-sub"><span data-adv="">185.22.64.10 · dokploy v0.28.4 · 71% cpu</span><span data-simple="">Helsinki · Hetzner · plenty of room</span></div></button></div></div><div class="grid grid-2" data-adv=""><div class="field"><label>Branch</label><input class="input mono" value="main"></div><div class="field"><label>Custom domain (optional)</label><input class="input mono" placeholder="notes.kyzdes.dev"></div></div><div class="grid grid-2" data-adv=""><div class="field"><label>Build command (auto-detected)</label><input class="input mono" value="pnpm build" placeholder="auto"></div><div class="field"><label>Port</label><input class="input mono" value="3000"></div></div><div class="field" data-adv=""><label>Environment variables</label><textarea class="textarea mono" placeholder="KEY=value, one per line — or let Claude detect what's needed"></textarea><div class="hint">Leave blank and Claude will pause to ask only for what the build truly requires.</div></div><div class="callout ai" data-simple=""><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v4M12 17v4M3 12h4M17 12h4"></path><path d="M12 8a4 4 0 0 0 4 4 4 4 0 0 0-4 4 4 4 0 0 0-4-4 4 4 0 0 0 4-4z"></path></svg></span><div>Don't worry about settings — Claude detects the framework, build command, and any keys it needs, then asks you only what it can't figure out.</div></div><div class="row-between wrap" style="gap: 12px;"><a class="btn btn-ghost" href="index.html">Cancel</a><button class="btn btn-primary btn-lg"><span class="icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4l4 4-4 4"></path><path d="M4 12h12"></path><path d="M4 20l4-4-4-4"></path></svg></span><span><span data-adv="">Start deploy</span><span data-simple="">Deploy</span></span></button></div></section></div>
+    
+      </main>
+  </div>
+</div>
+
+<script src="assets/app.js"></script>
+<script>
+window.pageInit = ({ el, icon, badge, toast, DATA, askClaude }) => {
+  const wrap = document.getElementById("wizard");
+  const stepperEl = document.getElementById("stepper");
+
+  const STEPS_SIMPLE = ["Paste link","Choose home","Deploy"];
+  const STEPS_ADV = ["Detect stack","Configure","Build & ship","DNS + SSL","Done"];
+
+  function renderStepper(activeIdx, doneTo, errorIdx = -1) {
+    const simple = document.documentElement.dataset.mode === "simple";
+    const steps = simple ? STEPS_SIMPLE : STEPS_ADV;
+    stepperEl.innerHTML = "";
+    steps.forEach((label, i) => {
+      let st = "pending";
+      if (i < doneTo) st = "done"; else if (i === activeIdx) st = "active";
+      if (i === errorIdx) st = "error";
+      const step = el("div", { class:"step step-" + st },
+        el("span", { class:"step-num" }, st === "done" ? icon("check", 13) : String(i + 1)),
+        el("div", { class:"step-body" },
+          el("span", { class:"step-label" }, label),
+          el("span", { class:"step-meta" }, st === "active" ? "in progress" : st === "done" ? "done" : st === "error" ? "failed" : "")));
+      stepperEl.append(step);
+      if (i < steps.length - 1) stepperEl.append(el("div", { class:"step-conn" + (i < doneTo ? " done" : "") }));
+    });
+  }
+
+  /* ── state 1: the form ── */
+  let chosen = "main";
+  function renderForm() {
+    renderStepper(0, 0);
+    wrap.innerHTML = "";
+    const serverCard = (s) => el("button", { class:"md-item" + (s.id === chosen ? " active" : ""), type:"button",
+      onclick:()=>{ chosen = s.id; renderForm(); } },
+      el("div", { class:"md-name" }, icon("server", 15), s.name, s.is_default ? el("span",{class:"tag-mini"},"recommended") : null),
+      el("div", { class:"md-sub" },
+        el("span", { "data-adv":"" }, s.ip + " · dokploy " + s.dokploy + " · " + s.cpu + "% cpu"),
+        el("span", { "data-simple":"" }, s.region + " · plenty of room")));
+
+    const form = el("section", { class:"card card-pad stack" },
+      el("div", { class:"field" },
+        el("label", null, el("span",{ "data-adv":"" },"Repository"), el("span",{ "data-simple":"" },"Your GitHub link")),
+        el("div", { class:"input-group" },
+          el("input", { class:"input mono", id:"repo", placeholder:"github.com/your-name/your-app", value:"github.com/kyzdes/notes-app" }),
+          el("button", { class:"ask-claude", "data-claude":"default", type:"button", style:{height:"40px"} }, icon("spark", 13), "Pick for me")),
+        el("div", { class:"hint", "data-simple":"" }, "Public or private — Dokpilot connects with your saved GitHub access.")),
+
+      el("div", { class:"field" },
+        el("label", null, el("span",{ "data-adv":"" },"Target server"), el("span",{ "data-simple":"" },"Where should it live?")),
+        el("div", { class:"md-list", style:{flexDirection:"row",flexWrap:"wrap"} }, ...DATA.servers.map(serverCard))),
+
+      // advanced-only config
+      el("div", { class:"grid grid-2", "data-adv":"" },
+        el("div", { class:"field" }, el("label", null, "Branch"), el("input", { class:"input mono", value:"main" })),
+        el("div", { class:"field" }, el("label", null, "Custom domain (optional)"), el("input", { class:"input mono", placeholder:"notes.kyzdes.dev" }))),
+      el("div", { class:"grid grid-2", "data-adv":"" },
+        el("div", { class:"field" }, el("label", null, "Build command (auto-detected)"), el("input", { class:"input mono", value:"pnpm build", placeholder:"auto" })),
+        el("div", { class:"field" }, el("label", null, "Port"), el("input", { class:"input mono", value:"3000" }))),
+      el("div", { class:"field", "data-adv":"" },
+        el("label", null, "Environment variables"),
+        el("textarea", { class:"textarea mono", placeholder:"KEY=value, one per line — or let Claude detect what's needed" }),
+        el("div", { class:"hint" }, "Leave blank and Claude will pause to ask only for what the build truly requires.")),
+
+      el("div", { class:"callout ai", "data-simple":"" }, icon("spark", 16),
+        el("div", null, "Don't worry about settings — Claude detects the framework, build command, and any keys it needs, then asks you only what it can't figure out.")),
+
+      el("div", { class:"row-between wrap", style:{gap:"12px"} },
+        el("a", { class:"btn btn-ghost", href:"index.html" }, "Cancel"),
+        el("button", { class:"btn btn-primary btn-lg", onclick:startDeploy }, icon("deploy", 16),
+          el("span", null, el("span",{ "data-adv":"" },"Start deploy"), el("span",{ "data-simple":"" },"Deploy")))),
+    );
+    wrap.append(form);
+  }
+
+  /* ── state 2: in-flight (streaming + Q&A) ── */
+  function startDeploy() {
+    const repo = (document.getElementById("repo")?.value || DATA.job.repo).replace(/^https?:\/\//,"");
+    renderStepper(0, 1);
+    wrap.innerHTML = "";
+
+    const logPre = el("pre", { class:"log-viewer mono", "aria-live":"polite", style:{maxHeight:"320px"} });
+    const cursor = el("div", { class:"log-line log-cursor mono" }, el("span",{class:"log-t"},"…"), el("span",{class:"log-text"},""));
+    const logCard = el("section", { class:"card" },
+      el("div", { class:"card-head" }, el("h3", null, el("span",{ "data-adv":"" },"Live log"), el("span",{ "data-simple":"" },"What Claude is doing")),
+        el("span", { class:"card-head-meta row", style:{display:"inline-flex",gap:"6px"} }, el("span",{class:"dot dot-info dot-pulse"}), "streaming")),
+      el("div", { class:"card-pad" }, logPre));
+    logPre.append(cursor);
+
+    const job = el("section", { class:"card mb-4" },
+      el("div", { class:"card-head" },
+        el("h3", null, repo),
+        badge("building")),
+      el("div", { class:"card-pad row wrap", style:{gap:"10px"} },
+        el("span", { class:"pill" }, icon("server", 10), "→ " + chosen),
+        el("span", { class:"pill", "data-adv":"" }, icon("branch", 10), "main"),
+        el("span", { class:"dim-mono grow" }, "job " + DATA.job.id)));
+
+    wrap.append(job, logCard);
+
+    const lines = DATA.job.log;
+    let i = 0;
+    const push = () => {
+      if (i < lines.length) {
+        const l = lines[i++];
+        logPre.insertBefore(el("div", { class:"log-line log-kind-" + l.kind },
+          el("span", { class:"log-t" }, l.t), el("span", { class:"log-text" }, l.text)), cursor);
+        logPre.scrollTop = logPre.scrollHeight;
+        if (i === 4) renderStepper(1, 1); // configuring
+        setTimeout(push, 520 + Math.random()*260);
+      } else {
+        cursor.remove();
+        renderStepper(1, 1);
+        renderQA(logCard, repo);
+      }
+    };
+    setTimeout(push, 300);
+  }
+
+  /* ── Q&A panel — Claude paused for answers ── */
+  function renderQA(logCard, repo) {
+    const qa = el("section", { class:"card mb-4" },
+      el("div", { class:"card-head" },
+        el("div", { class:"row", style:{gap:"8px"} }, el("span",{class:"dot dot-warning dot-pulse"}),
+          el("h3", null, el("span",{ "data-adv":"" },"Claude needs 3 answers"), el("span",{ "data-simple":"" },"A few quick questions"))),
+        el("button", { class:"ask-claude", "data-claude":"fill-env" }, icon("spark", 13),
+          el("span", null, el("span",{ "data-adv":"" },"Suggest values"), el("span",{ "data-simple":"" },"Fill these for me")))),
+      el("div", { class:"card-pad stack" },
+        ...DATA.job.questions.map((q, idx) => el("div", { class:"field" },
+          el("label", null, q.label),
+          q.type === "select"
+            ? el("select", { class:"select mono", id:"qa-" + q.id }, el("option",{value:"",selected:"true",disabled:"true"},"choose…"), ...q.opts.map(o => el("option", null, o)))
+            : el("input", { class:"input mono", id:"qa-" + q.id, placeholder:q.ph, autofocus: idx===0 ? "true" : null }),
+          q.hint ? el("div", { class:"hint" }, q.hint) : null)),
+        el("div", { class:"row-between", style:{marginTop:"4px"} },
+          el("button", { class:"btn btn-ghost", onclick:renderForm }, "Cancel deploy"),
+          el("button", { class:"btn btn-primary", onclick:()=>finish() }, "Submit & continue", icon("chevron", 14)))));
+    wrap.insertBefore(qa, logCard);
+  }
+
+  function finish() {
+    const simple = document.documentElement.dataset.mode === "simple";
+    renderStepper(simple ? 2 : 4, simple ? 3 : 5);
+    wrap.innerHTML = "";
+    toast("Deployed — notes.kyzdes.dev is live", "check");
+    wrap.append(el("section", { class:"card card-pad", style:{textAlign:"center",borderColor:"var(--accent-line)",background:"linear-gradient(180deg,var(--accent-soft),transparent)"} },
+      el("div", { style:{width:"52px",height:"52px",margin:"8px auto 16px",borderRadius:"50%",background:"var(--accent)",color:"var(--accent-on)",display:"grid",placeItems:"center",boxShadow:"0 0 24px var(--accent-glow)"} }, icon("check", 26)),
+      el("h2", { style:{fontSize:"var(--text-3xl)"} }, el("span",{ "data-adv":"" },"Deploy complete"), el("span",{ "data-simple":"" },"Your app is live")),
+      el("p", { class:"page-lead", style:{margin:"8px auto 20px"} }, "notes-app is running with HTTPS and auto-deploy on push."),
+      el("div", { class:"codeblock", style:{maxWidth:"380px",margin:"0 auto 20px"} },
+        icon("globe", 14), el("span", { class:"grow" }, "https://notes.kyzdes.dev"),
+        el("button", { class:"icon-btn", "data-copy":"https://notes.kyzdes.dev", title:"Copy" }, icon("copy", 14))),
+      el("div", { class:"row", style:{justifyContent:"center",gap:"10px"} },
+        el("a", { class:"btn btn-primary", href:"https://notes.kyzdes.dev", target:"_blank" }, "Open site", icon("ext", 13)),
+        el("a", { class:"btn", href:"projects.html?app=app_001" }, "Manage app"),
+        el("button", { class:"btn btn-ghost", onclick:renderForm }, "Deploy another"))));
+  }
+
+  renderForm();
+  // re-render stepper on mode change
+  new MutationObserver(() => { if (!document.querySelector("#wizard .log-viewer") && !document.querySelector("#wizard h2")) renderStepper(0,0); })
+    .observe(document.documentElement, { attributes:true, attributeFilter:["data-mode"] });
+};
+</script>
+</body>
+</html>
