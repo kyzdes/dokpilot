@@ -26,3 +26,4 @@ context-map-*/
 # Local-only working folders (not part of skill release)
 landing/
 .antigravitycli/
+.playwright-mcp/
