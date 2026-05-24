@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# Dokpilot UI launcher — M0
-# Spawns ui-server/server.js in background, captures the URL on stdout,
-# writes pid + port + token paths under ~/.claude/skills/dokpilot/, opens
-# the URL in the default browser (macOS `open`).
+# Dokpilot UI launcher
+# Spawns ui-server/server.js in background. The server writes its own
+# state files (.ui-pid, .ui-port, .ui-url) on listen — launcher polls
+# them with a 5s timeout. No FIFO, no race conditions on restart.
 #
 # Usage:
 #   launch.sh              start server, open browser, exit
@@ -15,7 +15,6 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SERVER_JS="$SCRIPT_DIR/server.js"
 
-# State paths — under skill install (not repo) so they survive repo moves
 STATE_DIR="${HOME}/.claude/skills/dokpilot"
 PID_FILE="$STATE_DIR/.ui-pid"
 PORT_FILE="$STATE_DIR/.ui-port"
@@ -70,35 +69,31 @@ if [ -f "$PID_FILE" ] && kill -0 "$(cat "$PID_FILE")" 2>/dev/null; then
 fi
 
 # ─── start ──────────────────────────────────────────────────────
-# Run in --quiet mode so the only stdout is the URL.
-# Background it, capture pid, read the URL from a tiny coproc.
-# We use a fifo for the URL handoff so we can wait for the listen event.
+# Remove any stale state files so we can detect a fresh write.
+rm -f "$URL_FILE" "$PORT_FILE" "$PID_FILE"
 
-URL_FIFO="$(mktemp -u)"
-mkfifo "$URL_FIFO"
-trap 'rm -f "$URL_FIFO"' EXIT
+# Run server in --quiet mode so stdout is just the URL (server also
+# writes state files atomically on listen — we poll those).
+nohup node "$SERVER_JS" --port 0 --quiet \
+  >>"$LOG_FILE" 2>>"$LOG_FILE" &
 
-# Spawn: write stderr to log, stdout to fifo, fork into background
-( node "$SERVER_JS" --port 0 --quiet 2>>"$LOG_FILE" 1>"$URL_FIFO" & echo $! >"$PID_FILE" ) &
+# Poll for state file with 5s timeout. The server writes .ui-url
+# atomically as the last step, so seeing it means the listener is up.
+deadline=$(($(date +%s) + 5))
+while [ ! -s "$URL_FILE" ]; do
+  if [ "$(date +%s)" -ge "$deadline" ]; then
+    echo "error: ui-server did not write state within 5s — check $LOG_FILE" >&2
+    exit 3
+  fi
+  sleep 0.1
+done
 
-# Read the URL with a 5s timeout (server should listen near-instantly)
-url=""
-if read -r -t 5 url <"$URL_FIFO"; then
-  :
-else
-  echo "error: ui-server did not emit URL within 5s — check $LOG_FILE" >&2
-  if [ -f "$PID_FILE" ]; then kill "$(cat "$PID_FILE")" 2>/dev/null || true; fi
-  exit 3
-fi
-
-# Derive port from URL (http://127.0.0.1:<port>/?t=…)
-port="$(echo "$url" | sed -nE 's|.*://127\.0\.0\.1:([0-9]+)/.*|\1|p')"
-chmod 600 "$PID_FILE" 2>/dev/null || true
-printf '%s' "$port" >"$PORT_FILE" && chmod 600 "$PORT_FILE" 2>/dev/null || true
-printf '%s' "$url"  >"$URL_FILE"  && chmod 600 "$URL_FILE"  2>/dev/null || true
+url="$(cat "$URL_FILE")"
+pid="$(cat "$PID_FILE")"
+port="$(cat "$PORT_FILE")"
 
 echo "Dokpilot UI live at: $url"
-echo "  pid:  $(cat "$PID_FILE")"
+echo "  pid:  $pid"
 echo "  log:  $LOG_FILE"
 echo "  stop: /dokpilot ui --stop"
 

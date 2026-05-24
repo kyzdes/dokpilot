@@ -394,11 +394,211 @@ document.addEventListener("keydown", (e) => {
   if (e.key === "Escape") { closePalette(); $(".overlay")?.remove(); if (openPop){ openPop.remove(); openPop=null; } }
 });
 
-/* ─── expose for per-page scripts ───────────────────────────────────── */
-window.Dok = { $, $$, el, icon, badge, toast, DATA, askClaude, go, openPalette };
+/* ─── API client + adapter ──────────────────────────────────────────── */
+/* When the dashboard is served by /dokpilot ui (via mcp-server/ui-server),
+   /api/* is live. We boot-fetch the read-only endpoints and overwrite the
+   MOCK_DATA fields. If any endpoint returns non-2xx or the server isn't
+   reachable, the MOCK_DATA stays — UI keeps rendering, just with the
+   prototype seed. This is the G-015 progressive-enhancement contract. */
+async function api(path, opts = {}) {
+  try {
+    const headers = { ...(opts.headers || {}) };
+    // The ui-server injects window.__DOKPILOT_TOKEN__ via inline <script>
+    // when it serves any .html. Cookie auth also works (when present),
+    // but bearer is bulletproof across browsers / automation contexts.
+    const tok = window.__DOKPILOT_TOKEN__;
+    if (tok && !headers["Authorization"]) headers["Authorization"] = "Bearer " + tok;
+    const res = await fetch(path, { credentials: "include", ...opts, headers });
+    if (!res.ok) return { __error: true, status: res.status };
+    return await res.json();
+  } catch (e) {
+    return { __error: true, message: String(e?.message || e) };
+  }
+}
 
-/* ─── boot: mount shell, then run page hook ─────────────────────────── */
-document.addEventListener("DOMContentLoaded", () => {
+const niceTime = (iso) => {
+  if (!iso) return "—";
+  const diff = Math.max(0, Date.now() - new Date(iso).getTime());
+  if (diff < 60_000)      return Math.round(diff / 1_000) + "s ago";
+  if (diff < 3_600_000)   return Math.round(diff / 60_000) + "m ago";
+  if (diff < 86_400_000)  return Math.round(diff / 3_600_000) + "h ago";
+  return Math.round(diff / 86_400_000) + "d ago";
+};
+
+function adaptServers(apiServers) {
+  return apiServers.map((s) => ({
+    id: s.id, name: s.name, ip: s.ip,
+    ssh: s.ssh_user, dokploy: s.dokploy_version || "—",
+    status: s.status === "healthy" ? "healthy" : (s.status || "unknown"),
+    region: "—",                  // future: /api/servers/:name/stats may include
+    secret: s.secret,
+    is_default: !!s.is_default,
+    // Metrics — populated by lazy /api/servers/:name/stats fetch (M2 wires this)
+    cpu: null, ram: null, disk: null,
+    ram_gb: "—", disk_gb: "—",
+    uptime: "—",
+    project_count: s.project_count,
+    app_count:     s.app_count,
+    compose_count: s.compose_count,
+    database_count: s.database_count,
+    apps: [],
+    error: s.error || null,
+  }));
+}
+
+function adaptApps(apiApps) {
+  const map = {};
+  for (const a of apiApps) {
+    map[a.id] = {
+      id: a.id, name: a.name,
+      domain: a.domain,
+      server: a.server,
+      stack: a.stack || "auto-detect",
+      status: a.status,
+      last: niceTime(a.last_deploy),
+      last_iso: a.last_deploy,
+      builds: 0,
+      env: [],          // detail fetch fills this in
+      db: null,
+      autodeploy: !!a.autodeploy,
+      kind: a.kind,
+      project_id: a.project_id,
+      project_name: a.project_name,
+    };
+  }
+  return map;
+}
+
+function synthActivity(apiApps) {
+  return apiApps
+    .filter((a) => a.last_deploy)
+    .sort((x, y) => new Date(y.last_deploy) - new Date(x.last_deploy))
+    .slice(0, 8)
+    .map((a) => ({
+      app: a.name,
+      server: a.server,
+      status: a.status === "running" ? "success" : a.status,
+      rel: niceTime(a.last_deploy),
+      dur: "—",
+    }));
+}
+
+/* Boot strategy:
+   - Health check first — if 401/404, stay on MOCK_DATA forever.
+   - AWAIT the fast endpoints (servers ~700ms, apps ~600ms) so the
+     dashboard's hero view (inventory + activity) renders with real
+     data without flicker.
+   - Fire-and-forget the slow ones (domains 5s+ N+1, databases 2s
+     N+1). When they resolve, patch DATA and dispatch a
+     `dokpilot:data-updated` event so the active page can rerender
+     just the affected widgets without a full reload.
+*/
+async function bootData() {
+  // Clean ?t= from URL bar on first load so the bearer token doesn't
+  // linger in browser history. The token is already captured into
+  // window.__DOKPILOT_TOKEN__ by the server-injected <script>.
+  if (window.__DOKPILOT_TOKEN__ && location.search.includes("t=")) {
+    try {
+      const u = new URL(location.href);
+      u.searchParams.delete("t");
+      const clean = u.pathname + (u.search === "?" ? "" : u.search) + u.hash;
+      history.replaceState(null, "", clean);
+    } catch {}
+  }
+
+  const h = await api("/api/health");
+  if (h.__error) {
+    if (window.console) console.info("[dokpilot] /api/health not reachable — staying on MOCK_DATA");
+    return false;
+  }
+
+  // Fast: await
+  const [servers, apps] = await Promise.all([
+    api("/api/servers"),
+    api("/api/apps"),
+  ]);
+
+  if (!servers.__error && Array.isArray(servers.servers)) {
+    DATA.servers = adaptServers(servers.servers);
+  }
+  if (!apps.__error && Array.isArray(apps.apps)) {
+    DATA.apps = adaptApps(apps.apps);
+    DATA.activity = synthActivity(apps.apps);
+
+    // Populate DATA.servers[i].apps[] with app IDs belonging to each server.
+    // projects.html iterates `s.apps.map(id => DATA.apps[id])`, so we need
+    // the IDs grouped per server.
+    if (Array.isArray(DATA.servers)) {
+      for (const s of DATA.servers) {
+        s.apps = apps.apps.filter((a) => a.server === s.id).map((a) => a.id);
+      }
+    }
+
+    // Back-compat aliases for OD-generated pages that hard-coded MOCK ids
+    // (e.g. index.html references DATA.apps.app_005 for the broken-card).
+    // Point each legacy key at a sensible real app so existing pageInit
+    // scripts render without crashing. When all five are missing, leave
+    // undefined and let pages defensively guard (we keep this minimal).
+    const all = Object.values(DATA.apps);
+    const byStatus = (s) => all.find(a => a.status === s);
+    const aliases = {
+      app_001: all[0],
+      app_002: all[1] || all[0],
+      app_003: byStatus("building") || all[2] || all[0],
+      app_004: all[3] || all[0],
+      app_005: byStatus("error") || byStatus("stopped") || all[4] || all[0],
+    };
+    for (const [k, v] of Object.entries(aliases)) {
+      if (v && !DATA.apps[k]) DATA.apps[k] = v;
+    }
+
+    // Same for the synthetic "needs attention" app — the broken card on
+    // index.html crashes if there's literally no error/stopped app. Inject
+    // a soft placeholder so the card renders an empty-state instead.
+    if (!DATA.apps.app_005) {
+      DATA.apps.app_005 = {
+        id: "_none", name: "(no apps in error state)",
+        server: "—", stack: "—", status: "running", last: "—",
+        env: [], db: null, autodeploy: false,
+        error: null,
+      };
+    } else if (!DATA.apps.app_005.error) {
+      // Synthesize a friendly message for non-error apps shown as "broken"
+      DATA.apps.app_005.error = DATA.apps.app_005.error
+        || "Last deploy needs attention. Open the app to see why.";
+    }
+  }
+
+  Object.assign(window.Dok || (window.Dok = {}), { api, live: true });
+  document.documentElement.dataset.dataSource = "live";
+
+  // Page-aware blocking: if the user is on a page whose primary content
+  // is the slow data, await it so pageInit renders with real values
+  // first-paint. Otherwise fire-and-forget and emit data-updated event.
+  const page = document.querySelector(".layout")?.dataset?.page;
+  const domainsP = api("/api/domains").then((r) => {
+    if (!r.__error && Array.isArray(r.domains)) {
+      DATA.domains = r.domains;
+      document.dispatchEvent(new CustomEvent("dokpilot:data-updated", { detail: { kind: "domains" } }));
+    }
+  });
+  const dbsP = api("/api/databases").then((r) => {
+    if (!r.__error && Array.isArray(r.databases)) {
+      DATA.databases = r.databases;
+      document.dispatchEvent(new CustomEvent("dokpilot:data-updated", { detail: { kind: "databases" } }));
+    }
+  });
+  if (page === "domains")    await domainsP;
+  if (page === "databases")  await dbsP;
+
+  return true;
+}
+
+/* ─── expose for per-page scripts ───────────────────────────────────── */
+window.Dok = { $, $$, el, icon, badge, toast, DATA, askClaude, go, openPalette, api, live: false };
+
+/* ─── boot: mount shell, fetch live data, then run page hook ────────── */
+document.addEventListener("DOMContentLoaded", async () => {
   const layout = $(".layout");
   if (!layout) return;
   const page = layout.dataset.page;
@@ -423,6 +623,9 @@ document.addEventListener("DOMContentLoaded", () => {
       el("span", { "data-adv":"" }, meta.lead.adv),
       el("span", { "data-simple":"" }, meta.lead.simple));
   }
+  // Boot live data (replaces MOCK_DATA fields when /api/* is reachable).
+  // Per-page scripts read DATA after this, so they get real data when live.
+  await bootData();
   if (typeof window.pageInit === "function") window.pageInit({ $, $$, el, icon, badge, toast, DATA, askClaude, go });
 });
 })();

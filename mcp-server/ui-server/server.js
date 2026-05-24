@@ -1,20 +1,31 @@
 #!/usr/bin/env node
-/* Dokpilot UI server — M0 foundation
+/* Dokpilot UI server — Epic 1 (read-only API + UI wiring)
    Node 20+ stdlib only. No npm deps.
-   Serves dokpilot-ui/ as static + minimal /api surface.
 
-   Security model
-     - 127.0.0.1 bind only (refuses other Hosts).
-     - Random ephemeral port unless --port specified.
-     - 32-byte bearer token issued per launch. First GET carries it in
-       the URL (`?t=…`); the server sets it as an HttpOnly SameSite=Strict
-       cookie and 302-redirects to a clean URL.  Subsequent requests are
-       authenticated via cookie OR `Authorization: Bearer …` header.
-     - Strict Origin/Referer check on every request (mitigates DNS
-       rebinding and CSRF). No CORS headers.
-     - POSTs will additionally require CSRF token in X-CSRF (added in M6).
+   Architecture:
+     server.js (this file)
+       - HTTP bootstrap
+       - auth gate (token cookie + Origin check)
+       - static file serving for dokpilot-ui/
+       - route dispatch via lib/router.js
+     lib/
+       exec.js     — shell wrappers around skill scripts
+       http.js     — response helpers
+       router.js   — pattern matcher
+     routes/
+       health.js
+       config.js
+       servers.js
+       apps.js
+       domains.js
+       databases.js
+       secrets.js
 
-   Args
+   Security model unchanged from M0: 127.0.0.1 bind, random ephemeral
+   port, 32-byte bearer token in URL → HttpOnly SameSite=Strict cookie
+   on first GET (302 to clean URL), strict Origin/Referer check, no CORS.
+
+   Args:
      --port <n>        explicit port (default: 0 = OS picks ephemeral)
      --token <hex>     explicit bearer token (default: generated 32-byte hex)
      --ui-root <path>  static root (default: <repo>/dokpilot-ui)
@@ -27,6 +38,9 @@ const fs     = require("node:fs");
 const path   = require("node:path");
 const crypto = require("node:crypto");
 const url    = require("node:url");
+
+const { json, text } = require("./lib/http");
+const { buildRouter } = require("./lib/router");
 
 /* ─── args ──────────────────────────────────────────────────────── */
 const argv = process.argv.slice(2);
@@ -47,6 +61,17 @@ if (!fs.existsSync(path.join(UI_ROOT, "index.html"))) {
   console.error(`ui-server: cannot find index.html under ${UI_ROOT}`);
   process.exit(2);
 }
+
+/* ─── routes ────────────────────────────────────────────────────── */
+const router = buildRouter([
+  require("./routes/health"),
+  require("./routes/config"),
+  require("./routes/servers"),
+  require("./routes/apps"),
+  require("./routes/domains"),
+  require("./routes/databases"),
+  require("./routes/secrets"),
+]);
 
 /* ─── helpers ───────────────────────────────────────────────────── */
 const MIME = {
@@ -82,37 +107,6 @@ const safeEqual = (a, b) => {
   return crypto.timingSafeEqual(ba, bb);
 };
 
-const json = (res, code, body) => {
-  const buf = Buffer.from(JSON.stringify(body));
-  res.writeHead(code, {
-    "content-type": "application/json; charset=utf-8",
-    "content-length": buf.length,
-    "x-content-type-options": "nosniff",
-    "cache-control": "no-store",
-  });
-  res.end(buf);
-};
-
-const text = (res, code, body, contentType = "text/plain; charset=utf-8") => {
-  const buf = Buffer.from(body);
-  res.writeHead(code, {
-    "content-type": contentType,
-    "content-length": buf.length,
-    "x-content-type-options": "nosniff",
-    "cache-control": "no-store",
-  });
-  res.end(buf);
-};
-
-/* ─── auth ──────────────────────────────────────────────────────── */
-/**
- * Three-tier auth check:
- *   1. Token must be present in cookie, query, or Authorization: Bearer.
- *   2. Origin/Referer (if present) must match http://127.0.0.1:<port>.
- *   3. Host header must be 127.0.0.1 or localhost.
- *
- * Returns { ok: true, source } or { ok: false, reason }.
- */
 function checkAuth(req, port) {
   const u = url.parse(req.url, true);
   const cookies = parseCookies(req.headers.cookie);
@@ -150,30 +144,7 @@ const missingTokenPage = (reason) =>
   `<p style="color:#6c7178;">The dashboard refuses direct visits without a launch-issued token. This protects against accidental remote access and CSRF.</p>` +
   `</div>`;
 
-/* ─── routes ────────────────────────────────────────────────────── */
-function handleApi(req, res, port) {
-  const u = url.parse(req.url, true);
-
-  if (u.pathname === "/api/health" && req.method === "GET") {
-    return json(res, 200, {
-      status: "ok",
-      version: "v4.0.0",
-      port,
-      pid: process.pid,
-      uptime_s: Math.round(process.uptime()),
-      milestone: "M0",
-      next: "M1: /api/config + /api/servers + /api/apps",
-      ui_root: UI_ROOT,
-    });
-  }
-
-  return json(res, 501, {
-    error: "not-implemented",
-    message: `Endpoint ${req.method} ${u.pathname} is not wired yet. M0 ships only /api/health.`,
-    milestone: "M0",
-  });
-}
-
+/* ─── handlers ──────────────────────────────────────────────────── */
 function handleStatic(req, res) {
   const u = url.parse(req.url);
   let p = decodeURIComponent(u.pathname || "/");
@@ -188,6 +159,34 @@ function handleStatic(req, res) {
     if (err || !st.isFile()) return text(res, 404, "not found");
     const ext = path.extname(target).toLowerCase();
     const mime = MIME[ext] || "application/octet-stream";
+
+    // For HTML responses, inject the bearer token as a window global so
+    // client-side fetch() can use Authorization: Bearer reliably.
+    // Cookie-based auth still works as a backup, but some browsers
+    // (especially automated/headless ones) drop HttpOnly+SameSite=Strict
+    // cookies set on a 302 redirect — bearer header sidesteps that.
+    if (ext === ".html") {
+      fs.readFile(target, "utf8", (rerr, html) => {
+        if (rerr) return text(res, 500, "read failed");
+        const injection = `<script>window.__DOKPILOT_TOKEN__=${JSON.stringify(TOKEN)};</script>`;
+        // Inject before </head> if present, else before </body>, else at start
+        let patched;
+        if (/<\/head>/i.test(html))      patched = html.replace(/<\/head>/i, injection + "</head>");
+        else if (/<\/body>/i.test(html)) patched = html.replace(/<\/body>/i, injection + "</body>");
+        else                              patched = injection + html;
+        const buf = Buffer.from(patched);
+        res.writeHead(200, {
+          "content-type": mime,
+          "content-length": buf.length,
+          "x-content-type-options": "nosniff",
+          "referrer-policy": "strict-origin-when-cross-origin",
+          "cache-control": "no-cache",
+        });
+        res.end(buf);
+      });
+      return;
+    }
+
     res.writeHead(200, {
       "content-type": mime,
       "content-length": st.size,
@@ -209,21 +208,19 @@ function dispatch(req, res, port) {
 
   const u = url.parse(req.url, true);
   const cookies = parseCookies(req.headers.cookie);
-  const cookieTok = cookies[COOKIE_NAME];
   const queryTok = u.query.t;
 
-  // First-hit: token in query, no cookie yet → set cookie + redirect to clean URL
-  // (only for HTML navigation; /api/* clients should send the header explicitly)
-  if (queryTok && !cookieTok && !u.pathname.startsWith("/api/")) {
+  // First-hit: token in query → set cookie as a backup, but DO NOT redirect.
+  // Browsers (especially automation contexts like Comet/Playwright) frequently
+  // drop HttpOnly+SameSite=Strict cookies set on a 302 response, breaking
+  // the auth flow. Instead we serve the HTML directly. The HTML embeds the
+  // token via window.__DOKPILOT_TOKEN__ (see handleStatic), and the client
+  // uses Authorization: Bearer for /api/* — no cookie reliance.
+  // The ?t= stays in the URL initially; client-side JS cleans it via
+  // history.replaceState() (see app.js bootData).
+  if (queryTok && !u.pathname.startsWith("/api/")) {
     const auth = checkAuth(req, port);
-    if (auth.ok) {
-      setTokenCookie(res);
-      const newQuery = { ...u.query };
-      delete newQuery.t;
-      const qs = new url.URLSearchParams(newQuery).toString();
-      res.writeHead(302, { location: u.pathname + (qs ? "?" + qs : "") });
-      return res.end();
-    }
+    if (auth.ok) setTokenCookie(res); // best-effort backup
   }
 
   // Auth gate
@@ -235,8 +232,23 @@ function dispatch(req, res, port) {
     return json(res, 401, { error: "unauthorized", reason: auth.reason });
   }
 
-  // Route
-  if (u.pathname.startsWith("/api/")) return handleApi(req, res, port);
+  // Route /api/* via the router
+  if (u.pathname.startsWith("/api/")) {
+    const match = router(req);
+    if (!match) {
+      return json(res, 404, {
+        error: "no-route",
+        message: `No route registered for ${req.method} ${u.pathname}`,
+      });
+    }
+    const ctx = { port, uiRoot: UI_ROOT, token: TOKEN };
+    return Promise.resolve(match.handler(req, res, ctx, match.params))
+      .catch((err) => {
+        console.error("[ui] route error:", err);
+        if (!res.headersSent) json(res, 500, { error: "internal", message: String(err?.message || err) });
+      });
+  }
+
   if (req.method !== "GET" && req.method !== "HEAD") return text(res, 405, "method not allowed");
   return handleStatic(req, res);
 }
@@ -254,6 +266,27 @@ const server = http.createServer((req, res) => {
 server.listen(PORT, "127.0.0.1", () => {
   const actualPort = server.address().port;
   const launchUrl = `http://127.0.0.1:${actualPort}/?t=${TOKEN}`;
+
+  // Write state files atomically so the launcher (or any concurrent
+  // reader) can pick up the URL without racing on a FIFO. The state
+  // dir is created by launch.sh, but be defensive in case the server
+  // is started directly.
+  const stateDir = path.join(process.env.HOME || ".", ".claude", "skills", "dokpilot");
+  try {
+    fs.mkdirSync(stateDir, { recursive: true });
+    const writeAtomic = (filename, content) => {
+      const target = path.join(stateDir, filename);
+      const tmp = target + ".tmp-" + process.pid;
+      fs.writeFileSync(tmp, content, { mode: 0o600 });
+      fs.renameSync(tmp, target);
+    };
+    writeAtomic(".ui-port", String(actualPort));
+    writeAtomic(".ui-url",  launchUrl);
+    writeAtomic(".ui-pid",  String(process.pid));
+  } catch (e) {
+    if (!QUIET) console.error("[ui] state-file write failed:", e.message);
+  }
+
   if (QUIET) {
     process.stdout.write(launchUrl + "\n");
   } else {
@@ -267,6 +300,5 @@ server.listen(PORT, "127.0.0.1", () => {
   }
 });
 
-/* ─── graceful shutdown ─────────────────────────────────────────── */
 process.on("SIGINT",  () => server.close(() => process.exit(0)));
 process.on("SIGTERM", () => server.close(() => process.exit(0)));
