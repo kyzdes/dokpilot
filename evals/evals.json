@@ -3,7 +3,7 @@
   "evals": [
     {
       "id": 1,
-      "prompt": "/vps deploy github.com/kyzdes/my-nextjs-app --domain app.kyzdes.com",
+      "prompt": "/dokpilot deploy github.com/kyzdes/my-nextjs-app --domain app.kyzdes.com",
       "expected_output": "The skill should: 1) Read deploy-guide.md (not search web), 2) Clone repo and detect Next.js stack, 3) Create project with environmentId, 4) Set up DNS with --no-proxy, 5) Deploy via API, 6) After deploy, mention that auto-deploy is active via GitHub App (NOT suggest webhook setup), 7) NOT search the web for Dokploy docs",
       "files": [],
       "assertions": [
@@ -69,7 +69,7 @@
     },
     {
       "id": 3,
-      "prompt": "/vps setup 185.22.64.10 MyR00tPass456",
+      "prompt": "/dokpilot setup 185.22.64.10 MyR00tPass456",
       "expected_output": "The skill should: 1) Read setup-guide.md (not search web), 2) SSH to server, check resources, 3) Install Dokploy, 4) Wait for Dokploy to become available, 5) Ask user to create admin account in UI and provide API key, 6) On macOS, offer Keychain as the default storage for the API key (user can opt for plain file), 7) Save server config to servers.json with {\"_secret\": ...} reference when Keychain is chosen, 8) Report completion with next steps",
       "files": [],
       "assertions": [
@@ -112,7 +112,7 @@
     },
     {
       "id": 4,
-      "prompt": "/vps config migrate-to-keychain",
+      "prompt": "/dokpilot config migrate-to-keychain",
       "expected_output": "The skill should: 1) Read references/secrets-management.md, 2) Detect which secret fields in servers.json are plain strings, 3) Write a backup file config/servers.json.pre-keychain-<date>, 4) For each plain secret, call scripts/secret-store.sh set with the correct account naming convention (<server>:<field> or cloudflare:<field>), 5) Rewrite servers.json so every migrated field becomes {\"_secret\": \"<account>\"}, 6) Leave already-referenced fields untouched, 7) Print a summary report without printing any secret values",
       "files": [],
       "assertions": [
@@ -145,7 +145,7 @@
     },
     {
       "id": 5,
-      "prompt": "/vps status",
+      "prompt": "/dokpilot status",
       "expected_output": "On an installation whose servers.json still has plain-string tokens (legacy format), the skill should: 1) Treat the config as valid and proceed, 2) Call dokploy-api.sh — which uses resolve_secret() — and succeed against the string value, 3) NOT print a deprecation warning for the plain-string form, 4) NOT refuse to run or demand migration",
       "files": [
         {
@@ -157,7 +157,7 @@
         {
           "name": "accepts_legacy_config",
           "type": "positive",
-          "description": "Must run /vps status successfully against a config with plain-string tokens"
+          "description": "Must run /dokpilot status successfully against a config with plain-string tokens"
         },
         {
           "name": "no_deprecation_warning",
@@ -168,6 +168,44 @@
           "name": "no_forced_migration",
           "type": "negative",
           "description": "Must NOT block the command or require the user to migrate before status can run"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "prompt": "/dokpilot status",
+      "expected_output": "Against a Dokploy server whose version differs from the skill's documented baseline (v0.29+), the skill should: 1) Call settings.version via scripts/dokploy-api.sh to discover the running Dokploy version, 2) Compare against the documented baseline, 3) If the running version is BELOW baseline, print an actionable warning naming both versions and pointing to references/dokploy-api-reference.md, 4) If the running version is AT OR ABOVE baseline, proceed silently, 5) Never crash on a version mismatch — the warning is informational, status output is still produced",
+      "files": [
+        {
+          "path": "config/servers.json",
+          "content_hint": "servers.main.dokploy_url points to a Dokploy instance whose settings.version returns a string like 'v0.26.0' (below baseline) or 'v0.29.5' (at baseline)"
+        }
+      ],
+      "assertions": [
+        {
+          "name": "calls_settings_version",
+          "type": "positive",
+          "description": "Must call scripts/dokploy-api.sh <server> GET settings.version (or equivalent) at least once during status execution"
+        },
+        {
+          "name": "reads_documented_baseline",
+          "type": "positive",
+          "description": "Must determine the documented baseline either from references/dokploy-api-reference.md or from the skill's SKILL.md/README"
+        },
+        {
+          "name": "warns_on_below_baseline",
+          "type": "positive",
+          "description": "When the running version is older than the baseline, must print a warning that names BOTH versions ('Detected Dokploy v0.26.0. This skill targets v0.29+.') and references the docs"
+        },
+        {
+          "name": "silent_on_at_or_above",
+          "type": "negative",
+          "description": "When the running version is at or above the baseline, must NOT print a version-mismatch warning"
+        },
+        {
+          "name": "never_crashes_on_mismatch",
+          "type": "positive",
+          "description": "Must produce a normal status output regardless of version mismatch — the version check is informational, not a hard gate"
         }
       ]
     }

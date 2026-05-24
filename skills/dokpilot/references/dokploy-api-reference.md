@@ -7,24 +7,24 @@
 > Only read-only endpoints (*.one, *.all, *.version) use GET.
 > There are NO PUT or DELETE HTTP methods in the Dokploy API.
 
-Справочник основных Dokploy REST API endpoints, используемых в Dokpilot.
+Reference for the main Dokploy REST API endpoints used by Dokpilot.
 
-Полная документация: https://docs.dokploy.com/docs/api
+Full documentation: https://docs.dokploy.com/docs/api
 
-> **Версия:** Актуально для Dokploy v0.27+. Более ранние версии могут иметь другие эндпоинты и форматы ответов.
+> **Version:** Current for Dokploy v0.29+. Earlier versions may have different endpoints and response shapes.
 
 ---
 
-## Аутентификация
+## Authentication
 
-Все запросы требуют HTTP-заголовок:
+Every request requires the HTTP header:
 ```
 x-api-key: <your-api-key>
 ```
 
-API-ключ генерируется в Dokploy UI: Settings → Profile → API/CLI → Generate API Key
+Generate the API key in the Dokploy UI: Settings → Profile → API/CLI → Generate API Key
 
-> **Примечание:** В v0.27+ эндпоинт `auth.createUser` / `auth.createAdmin` удалён. Админ-аккаунт создаётся ТОЛЬКО через UI по адресу `http://IP:3000` при первом запуске.
+> **Note:** In v0.27+, the `auth.createUser` / `auth.createAdmin` endpoints were removed. The admin account is created ONLY through the UI at `http://IP:3000` on first launch.
 
 ---
 
@@ -34,7 +34,7 @@ API-ключ генерируется в Dokploy UI: Settings → Profile → AP
 http://<server-ip>:3000/api
 ```
 
-Или с доменом:
+Or with a domain:
 ```
 https://panel.example.com/api
 ```
@@ -45,7 +45,7 @@ https://panel.example.com/api
 
 ### `POST project.create`
 
-Создать новый проект (top-level контейнер для приложений и БД).
+Create a new project (top-level container for applications and databases).
 
 **Request:**
 ```json
@@ -57,7 +57,7 @@ https://panel.example.com/api
 
 **Response (v0.27+):**
 
-> **Внимание:** Ответ вложенный — содержит `project` и `environment` объекты.
+> **Important:** The response is nested — it contains both `project` and `environment` objects.
 
 ```json
 {
@@ -75,17 +75,17 @@ https://panel.example.com/api
 }
 ```
 
-**Извлечение данных:**
+**Extracting data:**
 ```bash
 PROJECT_ID=$(echo "$RESPONSE" | jq -r '.project.projectId // .projectId')
 ENVIRONMENT_ID=$(echo "$RESPONSE" | jq -r '.environment.environmentId // empty')
 ```
 
-> `environmentId` нужен для создания приложений, БД и Compose-проектов в рамках данного проекта.
+> `environmentId` is required when creating applications, databases, and Compose projects inside this project.
 
 ### `GET project.all`
 
-Получить все проекты (со вложенными приложениями, БД, доменами).
+List all projects (with nested applications, databases, and domains).
 
 **Response:**
 ```json
@@ -112,7 +112,7 @@ ENVIRONMENT_ID=$(echo "$RESPONSE" | jq -r '.environment.environmentId // empty')
 
 ### `POST project.remove`
 
-Удалить проект (вместе со всеми вложенными ресурсами).
+Delete a project (along with all nested resources).
 
 **Request:**
 ```json
@@ -127,7 +127,7 @@ ENVIRONMENT_ID=$(echo "$RESPONSE" | jq -r '.environment.environmentId // empty')
 
 ### `POST application.create`
 
-Создать приложение в проекте.
+Create an application inside a project.
 
 **Request (v0.27+):**
 ```json
@@ -138,7 +138,7 @@ ENVIRONMENT_ID=$(echo "$RESPONSE" | jq -r '.environment.environmentId // empty')
 }
 ```
 
-> **Обязательно:** `environmentId` — обязательное поле в v0.27+. Получается из ответа `project.create` (поле `environment.environmentId`) или из `project.all`.
+> **Required:** `environmentId` is a required field in v0.27+. Obtain it from the `project.create` response (`environment.environmentId`) or from `project.all`.
 
 **Response:**
 ```json
@@ -153,7 +153,7 @@ ENVIRONMENT_ID=$(echo "$RESPONSE" | jq -r '.environment.environmentId // empty')
 
 ### `POST application.update`
 
-Обновить настройки приложения (autoDeploy и другие флаги).
+Update application settings (autoDeploy and other flags).
 
 **Request:**
 ```json
@@ -256,7 +256,7 @@ POST application.update
 
 ### `POST application.saveBuildType`
 
-Установить тип билда.
+Set the build type.
 
 **Request (v0.28+):**
 ```json
@@ -275,7 +275,7 @@ POST application.update
 > Even for `nixpacks` builds, `dockerfile`, `herokuVersion`, and `railpackVersion`
 > must be present with default values. The Zod schema rejects requests missing any of these.
 
-Для `dockerfile` можно указать реальные значения:
+For `dockerfile`, you can pass real values:
 ```json
 {
   "applicationId": "app1",
@@ -288,11 +288,11 @@ POST application.update
 }
 ```
 
-Допустимые `buildType`: `nixpacks`, `dockerfile`, `railpack`, `heroku_buildpacks`, `paketo_buildpacks`, `static`.
+Allowed `buildType` values: `nixpacks`, `dockerfile`, `railpack`, `heroku_buildpacks`, `paketo_buildpacks`, `static`.
 
 ### `POST application.saveEnvironment`
 
-Установить env-переменные.
+Set environment variables.
 
 **Request (v0.28+):**
 ```json
@@ -308,11 +308,11 @@ POST application.update
 > **REQUIRED (v0.28+):** Fields `buildArgs`, `buildSecrets`, and `createEnvFile` are mandatory.
 > Without them, the Zod schema returns HTTP 400 with fieldErrors.
 
-Формат `env`: ключ=значение, разделитель — `\n` (перевод строки).
+`env` format: `KEY=VALUE` pairs separated by `\n` (newline).
 
 ### `POST application.deploy`
 
-Запустить деплой приложения.
+Trigger a deploy of the application.
 
 **Request:**
 ```json
@@ -330,7 +330,7 @@ POST application.update
 
 ### `POST application.stop`
 
-Остановить приложение.
+Stop the application.
 
 **Request:**
 ```json
@@ -341,7 +341,7 @@ POST application.update
 
 ### `POST application.start`
 
-Запустить приложение (после остановки).
+Start the application (after a stop).
 
 **Request:**
 ```json
@@ -352,7 +352,7 @@ POST application.update
 
 ### `POST application.redeploy`
 
-Передеплоить приложение (rebuild + restart).
+Redeploy the application (rebuild + restart).
 
 **Request:**
 ```json
@@ -363,7 +363,7 @@ POST application.update
 
 ### `GET application.one`
 
-Получить информацию об одном приложении.
+Get information about a single application.
 
 **Request (query params):**
 ```
@@ -388,7 +388,7 @@ POST application.update
 
 ### `POST application.delete`
 
-Удалить приложение.
+Delete the application.
 
 **Request:**
 ```json
@@ -403,7 +403,7 @@ POST application.update
 
 ### `POST compose.create`
 
-Создать compose-проект.
+Create a compose project.
 
 **Request (v0.27+):**
 ```json
@@ -414,7 +414,7 @@ POST application.update
 }
 ```
 
-> **Обязательно:** `environmentId` — обязательное поле в v0.27+.
+> **Required:** `environmentId` is a required field in v0.27+.
 
 **Response:**
 ```json
@@ -425,7 +425,7 @@ POST application.update
 
 ### `POST compose.saveGithubProvider`
 
-Настроить GitHub-репозиторий для compose-проекта через GitHub App. Аналогично `application.saveGithubProvider`.
+Configure a GitHub repository for a compose project via the GitHub App. Same as `application.saveGithubProvider`.
 
 **Request:**
 ```json
@@ -441,11 +441,11 @@ POST application.update
 
 ### `POST compose.update`
 
-Обновить настройки compose-проекта (composePath, raw YAML и другие флаги).
+Update settings of a compose project (composePath, raw YAML and other flags).
 
-> **ВАЖНО:** Для настройки GitHub-репозитория используй `compose.saveGithubProvider` (требует `githubId` из `gitProvider.getAll`).
+> **IMPORTANT:** To configure the GitHub repository, use `compose.saveGithubProvider` (requires `githubId` from `gitProvider.getAll`).
 
-**Для raw-режима (inline YAML):**
+**For raw mode (inline YAML):**
 ```json
 {
   "composeId": "comp1",
@@ -455,14 +455,14 @@ POST application.update
 }
 ```
 
-> **CRITICAL:** Поле для YAML — `composeFile`, НЕ `customCompose`.
-> Использование `customCompose` молча игнорируется — создаётся пустой docker-compose.yml, деплой падает с ошибкой "Compose file not found".
+> **CRITICAL:** The YAML field is `composeFile`, NOT `customCompose`.
+> Using `customCompose` is silently ignored — an empty docker-compose.yml is created and the deploy fails with "Compose file not found".
 
-> **Raw-режим** используется когда нет Git-репозитория: локально собранные образы, приватные репо без токена, или кастомные multi-container конфигурации.
+> **Raw mode** is used when there is no Git repository: locally built images, private repos without a token, or custom multi-container configurations.
 
 ### `POST compose.deploy`
 
-Задеплоить compose-проект.
+Deploy a compose project.
 
 **Request:**
 ```json
@@ -473,7 +473,7 @@ POST application.update
 
 ### `POST compose.remove`
 
-Удалить compose-проект.
+Delete a compose project.
 
 **Request:**
 ```json
@@ -527,7 +527,7 @@ echo "https://<dokploy-url>/api/deploy/compose/$REFRESH_TOKEN"
 
 ### `POST domain.create`
 
-Добавить домен к приложению.
+Add a domain to an application.
 
 **Request:**
 ```json
@@ -541,7 +541,7 @@ echo "https://<dokploy-url>/api/deploy/compose/$REFRESH_TOKEN"
 }
 ```
 
-> **Важно:** DNS A-запись должна быть создана и propagated ДО вызова `domain.create` с `certificateType: "letsencrypt"`. Иначе ACME challenge провалится и сертификат не будет выпущен. См. порядок: DNS → Domain → Deploy.
+> **Important:** The DNS A record must be created and propagated BEFORE calling `domain.create` with `certificateType: "letsencrypt"`. Otherwise the ACME challenge fails and the certificate is not issued. Order: DNS → Domain → Deploy.
 
 **Response:**
 ```json
@@ -555,7 +555,7 @@ echo "https://<dokploy-url>/api/deploy/compose/$REFRESH_TOKEN"
 
 ### `POST domain.delete`
 
-Удалить домен.
+Delete a domain.
 
 **Request:**
 ```json
@@ -570,7 +570,7 @@ echo "https://<dokploy-url>/api/deploy/compose/$REFRESH_TOKEN"
 
 ### `POST postgres.create`
 
-Создать PostgreSQL базу данных.
+Create a PostgreSQL database.
 
 **Request (v0.27+):**
 ```json
@@ -584,7 +584,7 @@ echo "https://<dokploy-url>/api/deploy/compose/$REFRESH_TOKEN"
 }
 ```
 
-> **Обязательно:** `environmentId` и `databasePassword` — обязательные поля в v0.27+.
+> **Required:** `environmentId` and `databasePassword` are required fields in v0.27+.
 
 **Response:**
 ```json
@@ -596,7 +596,7 @@ echo "https://<dokploy-url>/api/deploy/compose/$REFRESH_TOKEN"
 
 ### `POST postgres.deploy`
 
-Запустить PostgreSQL (после создания или остановки).
+Start PostgreSQL (after creating or stopping).
 
 **Request:**
 ```json
@@ -607,7 +607,7 @@ echo "https://<dokploy-url>/api/deploy/compose/$REFRESH_TOKEN"
 
 ### `GET postgres.one`
 
-Получить информацию о PostgreSQL, включая connection strings.
+Get information about a PostgreSQL instance, including connection strings.
 
 **Request (query params):**
 ```
@@ -628,7 +628,7 @@ echo "https://<dokploy-url>/api/deploy/compose/$REFRESH_TOKEN"
 
 ### `POST postgres.remove`
 
-Удалить PostgreSQL.
+Delete a PostgreSQL database.
 
 **Request:**
 ```json
@@ -641,8 +641,8 @@ echo "https://<dokploy-url>/api/deploy/compose/$REFRESH_TOKEN"
 
 ## Databases — MySQL
 
-Аналогично PostgreSQL, но endpoints:
-- `POST mysql.create` (требует `environmentId`, `databasePassword`)
+Same shape as PostgreSQL, but with these endpoints:
+- `POST mysql.create` (requires `environmentId`, `databasePassword`)
 - `POST mysql.deploy`
 - `GET mysql.one`
 - `POST mysql.remove`
@@ -651,7 +651,7 @@ echo "https://<dokploy-url>/api/deploy/compose/$REFRESH_TOKEN"
 
 ## Databases — MariaDB
 
-- `POST mariadb.create` (требует `environmentId`, `databasePassword`)
+- `POST mariadb.create` (requires `environmentId`, `databasePassword`)
 - `POST mariadb.deploy`
 - `GET mariadb.one`
 - `POST mariadb.remove`
@@ -660,7 +660,7 @@ echo "https://<dokploy-url>/api/deploy/compose/$REFRESH_TOKEN"
 
 ## Databases — MongoDB
 
-- `POST mongo.create` (требует `environmentId`, `databasePassword`)
+- `POST mongo.create` (requires `environmentId`, `databasePassword`)
 - `POST mongo.deploy`
 - `GET mongo.one`
 - `POST mongo.remove`
@@ -681,7 +681,7 @@ echo "https://<dokploy-url>/api/deploy/compose/$REFRESH_TOKEN"
 }
 ```
 
-> **Обязательно:** `environmentId` и `databasePassword` — обязательные поля в v0.27+.
+> **Required:** `environmentId` and `databasePassword` are required fields in v0.27+.
 
 **Response:**
 ```json
@@ -722,7 +722,7 @@ echo "https://<dokploy-url>/api/deploy/compose/$REFRESH_TOKEN"
 
 ### `GET deployment.all`
 
-Получить все деплойменты для приложения.
+List all deployments for an application.
 
 **Request (query params):**
 ```
@@ -743,15 +743,15 @@ echo "https://<dokploy-url>/api/deploy/compose/$REFRESH_TOKEN"
 
 ### `GET deployment.logsByDeployment`
 
-Получить логи деплоя.
+Get the logs of a deployment.
 
-> **NOTE:** Этот endpoint может не работать в некоторых версиях Dokploy.
-> **Основной метод:** Читать логи через SSH по пути из `logPath` в ответе `deployment.all`:
+> **NOTE:** This endpoint may not work in some Dokploy versions.
+> **Primary method:** Read logs via SSH using the `logPath` returned by `deployment.all`:
 > ```bash
 > LOG_PATH=$(echo "$RESPONSE" | jq -r '.[0].logPath')
 > bash scripts/ssh-exec.sh "$SERVER" "cat $LOG_PATH"
 > ```
-> Используй API endpoint только как fallback.
+> Use the API endpoint only as a fallback.
 
 **Request (query params):**
 ```
@@ -769,7 +769,7 @@ Build logs as plain text...
 
 ### `GET settings.version`
 
-Получить версию Dokploy.
+Get the Dokploy version.
 
 **Response:**
 ```json
@@ -780,17 +780,17 @@ Build logs as plain text...
 
 ---
 
-## Примеры использования
+## Usage examples
 
-### Создать проект и задеплоить Next.js приложение (v0.27+)
+### Create a project and deploy a Next.js application (v0.27+)
 
 ```bash
-# 1. Создать проект (ответ вложенный!)
+# 1. Create the project (response is nested!)
 RESPONSE=$(bash scripts/dokploy-api.sh main POST project.create '{"name":"my-saas"}')
 PROJECT_ID=$(echo "$RESPONSE" | jq -r '.project.projectId // .projectId')
 ENVIRONMENT_ID=$(echo "$RESPONSE" | jq -r '.environment.environmentId // empty')
 
-# 2. Создать PostgreSQL (требует environmentId и databasePassword)
+# 2. Create PostgreSQL (requires environmentId and databasePassword)
 PG=$(bash scripts/dokploy-api.sh main POST postgres.create '{
   "name":"my-saas-db",
   "projectId":"'"$PROJECT_ID"'",
@@ -801,14 +801,14 @@ PG=$(bash scripts/dokploy-api.sh main POST postgres.create '{
 }')
 PG_ID=$(echo "$PG" | jq -r '.postgresId')
 
-# 3. Деплой PostgreSQL
+# 3. Deploy PostgreSQL
 bash scripts/dokploy-api.sh main POST postgres.deploy '{"postgresId":"'"$PG_ID"'"}'
 
-# 4. Получить connection string
+# 4. Get the connection string
 PG_INFO=$(bash scripts/dokploy-api.sh main GET "postgres.one?postgresId=$PG_ID")
 DB_URL=$(echo "$PG_INFO" | jq -r '.internalDatabaseUrl')
 
-# 5. Создать приложение (требует environmentId)
+# 5. Create the application (requires environmentId)
 APP=$(bash scripts/dokploy-api.sh main POST application.create '{
   "name":"my-saas",
   "projectId":"'"$PROJECT_ID"'",
@@ -816,7 +816,7 @@ APP=$(bash scripts/dokploy-api.sh main POST application.create '{
 }')
 APP_ID=$(echo "$APP" | jq -r '.applicationId')
 
-# 6. Настроить GitHub (через GitHub App — если установлен)
+# 6. Configure GitHub (via the GitHub App — if installed)
 GITHUB_ID=$(bash scripts/dokploy-api.sh main GET "gitProvider.getAll" | \
   jq -r '[.[] | select(.providerType == "github")][0].githubId // empty')
 
@@ -832,7 +832,7 @@ if [ -n "$GITHUB_ID" ]; then
     "enableSubmodules":false
   }'
 else
-  # Fallback: customGitUrl для публичных репо
+  # Fallback: customGitUrl for public repos
   bash scripts/dokploy-api.sh main POST application.update '{
     "applicationId":"'"$APP_ID"'",
     "sourceType":"git",
@@ -841,7 +841,7 @@ else
   }'
 fi
 
-# 7. Установить buildType (все 7 полей обязательны в v0.28+)
+# 7. Set buildType (all 7 fields required in v0.28+)
 bash scripts/dokploy-api.sh main POST application.saveBuildType '{
   "applicationId":"'"$APP_ID"'",
   "buildType":"nixpacks",
@@ -852,7 +852,7 @@ bash scripts/dokploy-api.sh main POST application.saveBuildType '{
   "railpackVersion":"0.15.4"
 }'
 
-# 8. Установить env (все 5 полей обязательны в v0.28+)
+# 8. Set env (all 5 fields required in v0.28+)
 bash scripts/dokploy-api.sh main POST application.saveEnvironment '{
   "applicationId":"'"$APP_ID"'",
   "env":"DATABASE_URL='"$DB_URL"'\nNODE_ENV=production",
@@ -861,13 +861,13 @@ bash scripts/dokploy-api.sh main POST application.saveEnvironment '{
   "createEnvFile":true
 }'
 
-# 9. Создать DNS-запись (БЕЗ proxy для Let's Encrypt!)
+# 9. Create the DNS record (WITHOUT proxy for Let's Encrypt!)
 bash scripts/cloudflare-dns.sh create app.example.com "$SERVER_IP" false
 
-# 10. Подождать DNS propagation
+# 10. Wait for DNS propagation
 sleep 30
 
-# 11. Добавить домен с SSL
+# 11. Add the domain with SSL
 bash scripts/dokploy-api.sh main POST domain.create '{
   "applicationId":"'"$APP_ID"'",
   "host":"app.example.com",
@@ -877,19 +877,19 @@ bash scripts/dokploy-api.sh main POST domain.create '{
   "certificateType":"letsencrypt"
 }'
 
-# 12. Деплой
+# 12. Deploy
 bash scripts/dokploy-api.sh main POST application.deploy '{"applicationId":"'"$APP_ID"'"}'
 ```
 
-### Создать Compose-проект с raw YAML
+### Create a Compose project with raw YAML
 
 ```bash
-# 1. Создать проект
+# 1. Create the project
 RESPONSE=$(bash scripts/dokploy-api.sh main POST project.create '{"name":"my-compose-app"}')
 PROJECT_ID=$(echo "$RESPONSE" | jq -r '.project.projectId // .projectId')
 ENVIRONMENT_ID=$(echo "$RESPONSE" | jq -r '.environment.environmentId // empty')
 
-# 2. Создать compose-проект
+# 2. Create the compose project
 COMPOSE=$(bash scripts/dokploy-api.sh main POST compose.create '{
   "name":"my-compose-app",
   "projectId":"'"$PROJECT_ID"'",
@@ -897,7 +897,7 @@ COMPOSE=$(bash scripts/dokploy-api.sh main POST compose.create '{
 }')
 COMPOSE_ID=$(echo "$COMPOSE" | jq -r '.composeId')
 
-# 3. Загрузить raw YAML
+# 3. Upload raw YAML
 bash scripts/dokploy-api.sh main POST compose.update '{
   "composeId":"'"$COMPOSE_ID"'",
   "sourceType":"raw",
@@ -905,7 +905,7 @@ bash scripts/dokploy-api.sh main POST compose.update '{
   "composeFile":"services:\n  app:\n    image: my-app:latest\n    ports:\n      - '\''3000:3000'\''\n    networks:\n      - dokploy-network\nnetworks:\n  dokploy-network:\n    external: true"
 }'
 
-# 4. Деплой
+# 4. Deploy
 bash scripts/dokploy-api.sh main POST compose.deploy '{"composeId":"'"$COMPOSE_ID"'"}'
 ```
 
