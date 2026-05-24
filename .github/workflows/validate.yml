@@ -8,14 +8,14 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Check SKILL.md exists
-        run: test -f skills/vps/SKILL.md
+        run: test -f skills/dokpilot/SKILL.md
 
       - name: Check skill resource dirs present
         run: |
-          test -d skills/vps/scripts
-          test -d skills/vps/references
-          test -d skills/vps/templates
-          test -d skills/vps/config
+          test -d skills/dokpilot/scripts
+          test -d skills/dokpilot/references
+          test -d skills/dokpilot/templates
+          test -d skills/dokpilot/config
 
       - name: Validate plugin.json
         run: jq -e '.name and .version and .description' .claude-plugin/plugin.json
@@ -27,11 +27,11 @@ jobs:
 
       - name: Check mirror parity (AGENTS.md, GEMINI.md == SKILL.md)
         run: |
-          diff skills/vps/SKILL.md AGENTS.md
-          diff skills/vps/SKILL.md GEMINI.md
+          diff skills/dokpilot/SKILL.md AGENTS.md
+          diff skills/dokpilot/SKILL.md GEMINI.md
 
       - name: Check SKILL.md frontmatter parses
         run: |
-          head -30 skills/vps/SKILL.md | grep -q '^---$'
-          head -30 skills/vps/SKILL.md | grep -q '^name:'
-          head -30 skills/vps/SKILL.md | grep -q '^description:'
+          head -30 skills/dokpilot/SKILL.md | grep -q '^---$'
+          head -30 skills/dokpilot/SKILL.md | grep -q '^name:'
+          head -30 skills/dokpilot/SKILL.md | grep -q '^description:'

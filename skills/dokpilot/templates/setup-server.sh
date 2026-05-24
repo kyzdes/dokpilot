@@ -1,11 +1,11 @@
 #!/bin/bash
 # VPS Server Setup Template
-# This script is run on the VPS during /vps setup command
+# This script is run on the VPS during /dokpilot setup command
 # It performs basic server hardening and prepares for Dokploy installation
 
 set -euo pipefail
 
-echo "=== VPS Ninja Server Setup ==="
+echo "=== Dokpilot Server Setup ==="
 
 # Check if running as root
 if [ "$EUID" -ne 0 ]; then

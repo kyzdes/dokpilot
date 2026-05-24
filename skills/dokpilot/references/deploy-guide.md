@@ -1,6 +1,6 @@
 # Deploy Guide — Деплой проекта из GitHub
 
-Этот гайд вызывается при команде `/vps deploy <github-url> [--domain <domain>] [--server <name>] [--branch <branch>]`.
+Этот гайд вызывается при команде `/dokpilot deploy <github-url> [--domain <domain>] [--server <name>] [--branch <branch>]`.
 
 Цель: Задеплоить проект из GitHub-репозитория на VPS с автоматическим определением стека, настройкой env-переменных, DNS и SSL.
 
@@ -58,7 +58,7 @@ SERVER_ACCESS=$(bash scripts/ssh-exec.sh "$SERVER" "GIT_TERMINAL_PROMPT=0 git ls
 Создай временную директорию и клонируй репо:
 
 ```bash
-TEMP_DIR="/tmp/vps-ninja-$(date +%s)"
+TEMP_DIR="/tmp/dokpilot-$(date +%s)"
 git clone --depth 1 --branch <branch> <github-url> "$TEMP_DIR"
 ```
 
@@ -608,7 +608,7 @@ bash scripts/wait-ready.sh "https://$DOMAIN" 120 10
 
 Если timeout:
 ```
-Приложение не отвечает. Проверь логи: /vps logs $PROJECT_NAME
+Приложение не отвечает. Проверь логи: /dokpilot logs $PROJECT_NAME
 ```
 
 ### 3.12 Enable auto-deploy
@@ -653,9 +653,9 @@ Auto-deploy: Active via GitHub App
 
 Next steps:
   - Check app: https://$DOMAIN
-  - Logs: /vps logs $PROJECT_NAME
+  - Logs: /dokpilot logs $PROJECT_NAME
   - Enable CloudFlare proxy: cloudflare-dns.sh create $DOMAIN $SERVER_IP true
-  - Manual redeploy: /vps logs $PROJECT_NAME (or push to $BRANCH)
+  - Manual redeploy: /dokpilot logs $PROJECT_NAME (or push to $BRANCH)
 ```
 
 ---
@@ -845,7 +845,7 @@ echo "Webhook: $DOKPLOY_URL/api/deploy/compose/$REFRESH_TOKEN"
 Причина: <error message>
 
 Варианты:
-  1. Настрой CloudFlare токен: /vps config cloudflare <token>
+  1. Настрой CloudFlare токен: /dokpilot config cloudflare <token>
   2. Создай A-запись вручную: $DOMAIN → $SERVER_IP
   3. Продолжить без домена (доступ по IP:порт)
 ```

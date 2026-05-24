@@ -22,3 +22,7 @@ landing/.next/
 # and known issues that must not be pushed to public hosting.
 context-map-*/
 # end context-map skill section
+
+# Local-only working folders (not part of skill release)
+landing/
+.antigravitycli/

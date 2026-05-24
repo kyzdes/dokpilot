@@ -1,5 +1,5 @@
 ---
-name: vps
+name: dokpilot
 description: >
   Deploy and manage applications on VPS servers with Dokploy.
   Use when the user wants to: set up a new VPS server, deploy a project
@@ -24,7 +24,7 @@ allowed-tools:
   - Agent
 ---
 
-# VPS Ninja v3.1 — DevOps Automation Skill
+# Dokpilot v3.1 — DevOps Automation Skill
 
 You are a DevOps engineer. Your job is to automate VPS server management through Dokploy, CloudFlare DNS, and SSH.
 
@@ -178,7 +178,7 @@ CONFIG_PATH="<skill-dir>/config/servers.json"
 
 If the file doesn't exist, tell the user:
 - "Configuration not found. Set up a server first."
-- Suggest: `/vps config server add <name> <ip>` or `/vps config cloudflare <token>`
+- Suggest: `/dokpilot config server add <name> <ip>` or `/dokpilot config cloudflare <token>`
 
 ### 2. Scripts
 
@@ -208,7 +208,7 @@ All scripts are in `<skill-dir>/scripts/`. Always use full paths when calling th
 ### 5. Determining skill path
 
 ```bash
-SKILL_DIR="${VPS_SKILL_DIR:-$HOME/.claude/skills/vps}"
+SKILL_DIR="${DOKPILOT_SKILL_DIR:-$HOME/.claude/skills/dokpilot}"
 ```
 
 Or determine from the path to this SKILL.md file.
@@ -217,7 +217,7 @@ Or determine from the path to this SKILL.md file.
 
 ## Inline commands
 
-### `/vps config` — Configuration management
+### `/dokpilot config` — Configuration management
 
 Secrets (Dokploy API keys, CloudFlare token) are stored in the macOS Keychain when
 available. `servers.json` holds a reference of the form `{"_secret": "<account>"}`;
@@ -231,9 +231,9 @@ Print a source report — **values are never printed**. For each secret field, s
 whether it lives in the Keychain or as a plain value in the file:
 
 ```
-servers.main.dokploy_api_key  → keychain (vps-ninja / main:dokploy_api_key)
+servers.main.dokploy_api_key  → keychain (dokpilot / main:dokploy_api_key)
 servers.main.ssh_key          → file (path)
-cloudflare.api_token          → keychain (vps-ninja / cloudflare:api_token)
+cloudflare.api_token          → keychain (dokpilot / cloudflare:api_token)
 defaults.server               → main
 ```
 
@@ -303,7 +303,7 @@ Move all existing plain-string secrets from `servers.json` into the Keychain.
 
 ---
 
-### `/vps domain` — Domain management
+### `/dokpilot domain` — Domain management
 
 #### `domain add <full-domain> <project-name> [--port <port>] [--server <name>]`
 
@@ -336,7 +336,7 @@ Show all domains across projects.
 
 ---
 
-### `/vps db` — Database management
+### `/dokpilot db` — Database management
 
 Supported types: `postgres`, `mysql`, `mariadb`, `mongo`, `redis`
 
@@ -355,7 +355,7 @@ Delete database (after confirmation).
 
 ---
 
-### `/vps status` — Server and project status
+### `/dokpilot status` — Server and project status
 
 **Syntax:** `status [--server <name>]`
 
@@ -369,7 +369,7 @@ Delete database (after confirmation).
 
 ---
 
-### `/vps logs` — View logs
+### `/dokpilot logs` — View logs
 
 **Syntax:** `logs <project-name> [--lines <n>] [--build]`
 
@@ -378,7 +378,7 @@ Delete database (after confirmation).
 
 ---
 
-### `/vps destroy` — Delete project
+### `/dokpilot destroy` — Delete project
 
 **Syntax:** `destroy <project-name> [--keep-db] [--keep-dns] [--server <name>]`
 
@@ -394,11 +394,11 @@ Delete database (after confirmation).
 
 ## Complex commands (use reference guides)
 
-### `/vps setup` — Set up VPS from scratch
+### `/dokpilot setup` — Set up VPS from scratch
 
 Read and follow: `references/setup-guide.md`
 
-### `/vps deploy` — Deploy project from GitHub
+### `/dokpilot deploy` — Deploy project from GitHub
 
 Read and follow: `references/deploy-guide.md` + `references/stack-detection.md`
 
@@ -412,31 +412,31 @@ Key improvements in v3.1:
 ## Help (when $ARGUMENTS is empty)
 
 ```
-VPS Ninja v3.1 — VPS automation with Dokploy
+Dokpilot v3.1 — VPS automation with Dokploy
 
 Commands:
 
-  /vps setup <ip> <password>              Set up a fresh VPS (install Dokploy)
-  /vps deploy <github-url> [--domain D]   Deploy a GitHub project
-  /vps domain add <domain> <project>      Add domain to project [--server S]
-  /vps domain remove <domain>             Remove domain
-  /vps domain list                        List all domains
-  /vps db create <type> <name>            Create DB [--server S] [--project P]
-  /vps db list                            List all databases
-  /vps db delete <name>                   Delete database
-  /vps status [--server <name>]           Server and project status
-  /vps logs <project> [--build]           Application or build logs
-  /vps destroy <project>                  Delete project [--server S]
-  /vps config                             Show configuration
-  /vps config server add <name> <ip>      Add server
-  /vps config cloudflare <token>          Configure CloudFlare API
+  /dokpilot setup <ip> <password>              Set up a fresh VPS (install Dokploy)
+  /dokpilot deploy <github-url> [--domain D]   Deploy a GitHub project
+  /dokpilot domain add <domain> <project>      Add domain to project [--server S]
+  /dokpilot domain remove <domain>             Remove domain
+  /dokpilot domain list                        List all domains
+  /dokpilot db create <type> <name>            Create DB [--server S] [--project P]
+  /dokpilot db list                            List all databases
+  /dokpilot db delete <name>                   Delete database
+  /dokpilot status [--server <name>]           Server and project status
+  /dokpilot logs <project> [--build]           Application or build logs
+  /dokpilot destroy <project>                  Delete project [--server S]
+  /dokpilot config                             Show configuration
+  /dokpilot config server add <name> <ip>      Add server
+  /dokpilot config cloudflare <token>          Configure CloudFlare API
 
 Examples:
 
-  /vps setup 45.55.67.89 MyPassword123
-  /vps deploy github.com/user/my-app --domain app.example.com
-  /vps status
-  /vps logs my-app --build
+  /dokpilot setup 45.55.67.89 MyPassword123
+  /dokpilot deploy github.com/user/my-app --domain app.example.com
+  /dokpilot status
+  /dokpilot logs my-app --build
 ```
 
 ---

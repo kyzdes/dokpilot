@@ -1,6 +1,6 @@
 # Secrets Management
 
-VPS Ninja handles two kinds of sensitive credentials:
+Dokpilot handles two kinds of sensitive credentials:
 
 | Credential | Scope of access |
 |:-----------|:----------------|
@@ -39,7 +39,7 @@ Still supported. Existing installations keep working without any changes.
 }
 ```
 
-The `_secret` string is the **account** name under service `vps-ninja` in the
+The `_secret` string is the **account** name under service `dokpilot` in the
 Keychain. Naming convention:
 
 - `<server-name>:<field>` for per-server secrets (e.g. `main:dokploy_api_key`)
@@ -55,7 +55,7 @@ and `scripts/_lib.sh::resolve_secret()`.
 When the calling binary (bash, Terminal, Claude Code) first reads a stored item,
 macOS shows a system dialog:
 
-> **"vps-ninja" wants to use your confidential information stored in "main:dokploy_api_key" in your keychain.**
+> **"dokpilot" wants to use your confidential information stored in "main:dokploy_api_key" in your keychain.**
 > **[Deny] [Allow] [Always Allow]**
 
 Pick **Always Allow** to whitelist the binary. The dialog never appears again
@@ -71,7 +71,7 @@ writing items, so the default ACL is tight.
 Via the skill:
 
 ```
-/vps config server add main 45.55.67.89
+/dokpilot config server add main 45.55.67.89
 # prompts (hidden) for the API key, asks Keychain vs file
 ```
 
@@ -104,7 +104,7 @@ Exit 0 on macOS with `security` in `$PATH`. Exit 1 otherwise.
 ### Migrate existing installations
 
 ```
-/vps config migrate-to-keychain
+/dokpilot config migrate-to-keychain
 ```
 
 Moves every plain-string secret in `servers.json` into the Keychain, rewrites
@@ -129,7 +129,7 @@ No changes to `servers.json` required — the reference is stable.
 
 ## Revoking access for a binary
 
-Open **Keychain Access.app** → search for `vps-ninja` → select the item →
+Open **Keychain Access.app** → search for `dokpilot` → select the item →
 **Access Control** tab → remove the application from the allow list. The next
 call will re-prompt.
 
@@ -169,22 +169,22 @@ Or log out and back in.
 
 ### `secret-store.sh: Secret not found`
 
-The account name does not exist under service `vps-ninja`. List what is stored:
+The account name does not exist under service `dokpilot`. List what is stored:
 
 ```bash
 bash scripts/secret-store.sh list
 ```
 
-If the item is missing, re-run `/vps config server add <name>` or
-`/vps config cloudflare`.
+If the item is missing, re-run `/dokpilot config server add <name>` or
+`/dokpilot config cloudflare`.
 
 ### Running on Linux / Windows
 
 Keychain storage is macOS only. On other platforms:
 
 - `secret-store.sh available` exits 1.
-- `/vps config server add` and `/vps config cloudflare` save plain strings.
-- `/vps config migrate-to-keychain` refuses to run.
+- `/dokpilot config server add` and `/dokpilot config cloudflare` save plain strings.
+- `/dokpilot config migrate-to-keychain` refuses to run.
 - Everything else works as it did in v3.1.
 
 ---
@@ -199,7 +199,7 @@ move it into the Keychain — the private key stays in `~/.ssh/` under
 ssh-add --apple-use-keychain ~/.ssh/id_ed25519
 ```
 
-This is macOS's system-wide integration and is unaffected by VPS Ninja.
+This is macOS's system-wide integration and is unaffected by Dokpilot.
 
 ---
 

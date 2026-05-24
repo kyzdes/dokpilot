@@ -1,6 +1,6 @@
 # Fixed Errors — Production Deployment Issues & Solutions
 
-This document catalogs all real-world deployment issues encountered during VPS Ninja development, their root causes, and how they were resolved. Each fix is reflected in the current skill code and reference guides.
+This document catalogs all real-world deployment issues encountered during Dokpilot development, their root causes, and how they were resolved. Each fix is reflected in the current skill code and reference guides.
 
 ---
 

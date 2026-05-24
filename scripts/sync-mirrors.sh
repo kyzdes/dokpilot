@@ -4,7 +4,7 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-SRC="$ROOT/skills/vps/SKILL.md"
+SRC="$ROOT/skills/dokpilot/SKILL.md"
 
 for MIRROR in "$ROOT/AGENTS.md" "$ROOT/GEMINI.md"; do
   if [ -L "$MIRROR" ]; then

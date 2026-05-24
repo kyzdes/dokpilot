@@ -1,6 +1,33 @@
 # Changelog
 
-All notable changes to VPS Ninja are documented in this file.
+All notable changes to Dokpilot are documented in this file.
+
+---
+
+## v4.0.0 — 2026-05-24
+
+### Renamed
+
+- **Plugin slug:** `vps-ninja` → `dokpilot`. Repo: `kyzdes/vps-ninja` → `kyzdes/dokpilot` (landing repo similarly).
+- **Skill slug:** `vps` → `dokpilot`. Command prefix `/vps …` → `/dokpilot …`. Install path `~/.claude/skills/vps/` → `~/.claude/skills/dokpilot/`.
+- **macOS Keychain service:** `vps-ninja` → `dokpilot`. Re-run `dokpilot config migrate-to-keychain` after upgrade if you already had Keychain items under the old service.
+- **In-repo skill directory:** `skills/vps/` → `skills/dokpilot/`. CI workflow and `scripts/sync-mirrors.sh` updated to match.
+- Plugin metadata (`.claude-plugin/plugin.json`, `gemini-extension.json`) bumped to v4.0.0 with new homepage / repository URLs.
+
+### Added
+
+- `LICENSE` (MIT) at repo root.
+
+### Not changed
+
+- Command surface (`setup|deploy|domain|db|status|logs|destroy|config`) — same names, same args.
+- Dokploy tRPC contracts and CloudFlare DNS flow.
+- macOS Keychain secret-store mechanics (only the service name changed).
+
+### Migration notes
+
+- This is a hard rename. There are **no `/vps` alias commands** and the old `vps-ninja` plugin slug is gone. GitHub's repo-rename redirect covers the URL change; nothing further is needed for `git pull`.
+- If you scripted any path with `~/.claude/skills/vps` or `skills/vps/`, update it to `dokpilot`.
 
 ---
 
@@ -8,7 +35,7 @@ All notable changes to VPS Ninja are documented in this file.
 
 ### Security
 
-- **Secrets moved to macOS Keychain by default** — Dokploy API keys and the CloudFlare API token now live under service `vps-ninja` in the system Keychain. `config/servers.json` holds references of the form `{"_secret": "<account>"}` instead of raw values. Plain-string storage remains fully supported for backwards compatibility and non-macOS platforms.
+- **Secrets moved to macOS Keychain by default** — Dokploy API keys and the CloudFlare API token now live under service `dokpilot` in the system Keychain. `config/servers.json` holds references of the form `{"_secret": "<account>"}` instead of raw values. Plain-string storage remains fully supported for backwards compatibility and non-macOS platforms.
 - **First-access prompt via system dialog** — Keychain items are stored without `-T`, so macOS prompts for permission the first time each binary reads a secret; users click "Always Allow" to whitelist. This is stricter than pre-authorising arbitrary callers.
 - **Hidden input for token entry** — `config server add` and `config cloudflare` prompt via `read -s` when invoked without an argument, keeping tokens out of shell history.
 - **Warning when a token is passed as a CLI argument** — `config cloudflare <token>` still works but now prints a rotation hint.
@@ -17,15 +44,15 @@ All notable changes to VPS Ninja are documented in this file.
 
 - **`scripts/secret-store.sh`** — thin wrapper over the macOS `security` CLI with `get`/`set`/`delete`/`list`/`available` actions.
 - **`scripts/_lib.sh`** — shared `resolve_secret()` helper sourced by `cloudflare-dns.sh` and `dokploy-api.sh`; transparently handles both plain-string and `{"_secret": ...}` forms.
-- **`/vps config migrate-to-keychain`** — one-shot migration for existing installations: writes a `.pre-keychain-<date>` backup, moves every plain secret into the Keychain, and rewrites `servers.json` to use references.
-- **`/vps config` output rewrite** — now prints a source report (Keychain vs file) per secret field without ever printing values.
+- **`/dokpilot config migrate-to-keychain`** — one-shot migration for existing installations: writes a `.pre-keychain-<date>` backup, moves every plain secret into the Keychain, and rewrites `servers.json` to use references.
+- **`/dokpilot config` output rewrite** — now prints a source report (Keychain vs file) per secret field without ever printing values.
 - **`references/secrets-management.md`** — new guide covering storage formats, the first-access prompt, rotation, revocation, rollback to plain, and troubleshooting a locked Keychain.
 - **Two new eval scenarios** — `config migrate-to-keychain` and backwards compatibility of legacy plain-string configs.
 
 ### Changed
 
-- **`/vps config server add` flow** — prompts for the API key with hidden input (no argument form), then asks where to store it. Keychain is the default on macOS.
-- **`/vps config server remove` flow** — now deletes related Keychain items after an explicit `Y/n` confirmation.
+- **`/dokpilot config server add` flow** — prompts for the API key with hidden input (no argument form), then asks where to store it. Keychain is the default on macOS.
+- **`/dokpilot config server remove` flow** — now deletes related Keychain items after an explicit `Y/n` confirmation.
 - **Eval #3 (Setup VPS)** — extended with assertions that Keychain is offered as the default secret store on macOS and that the raw token never reaches stdout.
 
 ### Not changed (by design)
@@ -47,7 +74,7 @@ All notable changes to VPS Ninja are documented in this file.
 
 - **`--dry-run` mode for deploy** — preview the full deployment plan (project, DNS, env vars) without executing any changes
 - **`--server` flag on all commands** — target a specific server in multi-server setups
-- **Resource warnings in `/vps status`** — alerts when disk > 80%, RAM > 90%, or Docker images are accumulating
+- **Resource warnings in `/dokpilot status`** — alerts when disk > 80%, RAM > 90%, or Docker images are accumulating
 - **Rollback documentation** — `references/troubleshooting.md` now includes rollback strategies for broken deployments
 - **Smoke test after manual Docker deploy** — automatic health check after fallback deployment
 

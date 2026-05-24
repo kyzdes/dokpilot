@@ -1,8 +1,8 @@
-# ТЗ: Хранение секретов VPS Ninja в macOS Keychain
+# ТЗ: Хранение секретов Dokpilot в macOS Keychain
 
 ## Контекст
 
-Сейчас все секреты VPS Ninja лежат в `~/.claude/skills/vps/config/servers.json` в открытом виде:
+Сейчас все секреты Dokpilot лежат в `~/.claude/skills/dokpilot/config/servers.json` в открытом виде:
 
 - `servers.<name>.dokploy_api_key` — API-ключ Dokploy (полный root-доступ к VPS)
 - `servers.<name>.ssh_key` — путь к приватному SSH-ключу
@@ -22,7 +22,7 @@
 **В скоупе:**
 - Новый скрипт `scripts/secret-store.sh` (обёртка над `security` CLI).
 - Адаптация трёх существующих скриптов (`cloudflare-dns.sh`, `dokploy-api.sh`, `ssh-exec.sh`) — они теперь резолвят значение через `secret-store.sh`.
-- Обновление команд раздела `/vps config` в `SKILL.md` (диалог при вводе токена; новая команда `config migrate-to-keychain`).
+- Обновление команд раздела `/dokpilot config` в `SKILL.md` (диалог при вводе токена; новая команда `config migrate-to-keychain`).
 - Новый `references/secrets-management.md` — гайд для пользователя.
 - Обновление 1 eval-сценария + добавление 2 новых.
 
@@ -60,29 +60,29 @@
 
 ### Naming convention для Keychain items
 
-- `service` (фиксировано): `vps-ninja`
+- `service` (фиксировано): `dokpilot`
 - `account` (динамически):
   - сервер: `<server-name>:<field>` — например `main:dokploy_api_key`
   - cloudflare: `cloudflare:api_token`
-- `comment`: `Created by vps-ninja skill on <ISO date>`
+- `comment`: `Created by dokpilot skill on <ISO date>`
 
 Команда чтения:
 
 ```bash
-security find-generic-password -s vps-ninja -a "main:dokploy_api_key" -w
+security find-generic-password -s dokpilot -a "main:dokploy_api_key" -w
 ```
 
 Команда записи:
 
 ```bash
-security add-generic-password -U -s vps-ninja -a "main:dokploy_api_key" -w "<token>" \
-  -j "Created by vps-ninja skill on 2026-04-19"
+security add-generic-password -U -s dokpilot -a "main:dokploy_api_key" -w "<token>" \
+  -j "Created by dokpilot skill on 2026-04-19"
 # -U — обновить, если уже есть; -T опускаем, чтобы доступ требовал явного разрешения пользователя
 ```
 
 > **Решение по `-T`**: НЕ добавляем `-T /usr/bin/security` или другие приложения. При первом доступе из терминала macOS покажет системный диалог — пользователь нажмёт «Always Allow» и больше его не увидит. Это лучше с точки зрения безопасности, чем «открыто всем».
 
-## UX команд `/vps config`
+## UX команд `/dokpilot config`
 
 ### `config server add <name> <ip> [--ssh-key <path>]`
 
@@ -127,9 +127,9 @@ cat config/servers.json | jq 'del(.servers[].dokploy_api_key, .servers[].ssh_key
 Меняем на отчёт со статусом источника каждого секрета:
 
 ```
-servers.main.dokploy_api_key  → keychain (vps-ninja / main:dokploy_api_key)
+servers.main.dokploy_api_key  → keychain (dokpilot / main:dokploy_api_key)
 servers.main.ssh_key           → file (path)
-cloudflare.api_token           → keychain (vps-ninja / cloudflare:api_token)
+cloudflare.api_token           → keychain (dokpilot / cloudflare:api_token)
 defaults.server                → main
 ```
 
@@ -145,12 +145,12 @@ Usage:
                                               (exit 1 если не найдено)
   secret-store.sh set <account> <value>    → записать; -U обновляет
   secret-store.sh delete <account>         → удалить
-  secret-store.sh list                     → перечислить аккаунты для service=vps-ninja
+  secret-store.sh list                     → перечислить аккаунты для service=dokpilot
   secret-store.sh available                → exit 0 если security CLI доступен; иначе 1
 
 Внутри:
   - Проверяет `command -v security` и uname=Darwin
-  - Service constant = "vps-ninja"
+  - Service constant = "dokpilot"
   - Все ошибки security маппит на читаемые сообщения
   - При записи: -U (update), без -T (force prompt at first access)
 ```
@@ -211,7 +211,7 @@ SSH_KEY=$(jq -r ".servers.\"$server_name\".ssh_key // empty" "$config")
 
 ### `SKILL.md`
 
-- Раздел `/vps config` (строки 219–250) переписать под новые UX-флоу.
+- Раздел `/dokpilot config` (строки 219–250) переписать под новые UX-флоу.
 - Добавить подраздел про команду `config migrate-to-keychain`.
 - В заголовке секции `### 3. Security` (около строки ~180) добавить пункт: «Tokens in Keychain by default on macOS».
 
@@ -228,7 +228,7 @@ SSH_KEY=$(jq -r ".servers.\"$server_name\".ssh_key // empty" "$config")
 - **Существующие установки**: `servers.json` со строковыми токенами читается как раньше, без warning'ов (тихая совместимость, чтобы не пугать).
 - **При следующем `config server add` / `config cloudflare`** — пользователь увидит новый вопрос про Keychain. Это естественный момент для миграции.
 - **Явная миграция**: команда `config migrate-to-keychain` — для тех, кто хочет всё перевести разом.
-- **Откат**: пользователь может вручную сделать `security find-generic-password -s vps-ninja -a "main:dokploy_api_key" -w` и положить значение обратно строкой в JSON. Документировать в `references/secrets-management.md`.
+- **Откат**: пользователь может вручную сделать `security find-generic-password -s dokpilot -a "main:dokploy_api_key" -w` и положить значение обратно строкой в JSON. Документировать в `references/secrets-management.md`.
 
 ## Тесты / evals
 
@@ -269,10 +269,10 @@ bash scripts/dokploy-api.sh main GET project.all | jq 'length'
 
 ## Verification (как убедиться что готово)
 
-1. На чистом конфиге выполнить `/vps config server add test 1.2.3.4`, ввести фиктивный токен — убедиться, что в `servers.json` записан `{_secret}`, а `security find-generic-password -s vps-ninja -a 'test:dokploy_api_key' -w` возвращает токен.
-2. Выполнить `/vps config migrate-to-keychain` на конфиге со строковыми токенами — проверить, что бэкап создан, JSON обновлён, в Keychain появились items.
-3. Запустить любую команду со старого README (`/vps status`, `/vps logs ...`) — должна работать без изменений.
-4. `/vps config` без аргументов — печатает источники, не значения.
+1. На чистом конфиге выполнить `/dokpilot config server add test 1.2.3.4`, ввести фиктивный токен — убедиться, что в `servers.json` записан `{_secret}`, а `security find-generic-password -s dokpilot -a 'test:dokploy_api_key' -w` возвращает токен.
+2. Выполнить `/dokpilot config migrate-to-keychain` на конфиге со строковыми токенами — проверить, что бэкап создан, JSON обновлён, в Keychain появились items.
+3. Запустить любую команду со старого README (`/dokpilot status`, `/dokpilot logs ...`) — должна работать без изменений.
+4. `/dokpilot config` без аргументов — печатает источники, не значения.
 5. Прогнать обновлённые evals — все зелёные.
 
 ## Открытые решения (зафиксированы)

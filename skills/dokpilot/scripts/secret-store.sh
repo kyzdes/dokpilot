@@ -5,10 +5,10 @@
 #   secret-store.sh get <account>            Print secret to stdout (exit 1 if missing)
 #   secret-store.sh set <account> <value>    Store or update secret
 #   secret-store.sh delete <account>         Remove secret
-#   secret-store.sh list                     List accounts for service=vps-ninja
+#   secret-store.sh list                     List accounts for service=dokpilot
 #   secret-store.sh available                Exit 0 if Keychain is usable here, 1 otherwise
 #
-# All items are stored under service="vps-ninja". Account names follow the
+# All items are stored under service="dokpilot". Account names follow the
 # convention "<server-name>:<field>" for server secrets and "cloudflare:<field>"
 # for CloudFlare secrets.
 #
@@ -21,7 +21,7 @@
 
 set -euo pipefail
 
-SERVICE="vps-ninja"
+SERVICE="dokpilot"
 
 _require_macos() {
   if [ "$(uname)" != "Darwin" ]; then
@@ -58,7 +58,7 @@ case "$ACTION" in
     _require_macos
     ACCOUNT="${2:?Missing account}"
     VALUE="${3:?Missing value}"
-    COMMENT="Created by vps-ninja skill on $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    COMMENT="Created by dokpilot skill on $(date -u +%Y-%m-%dT%H:%M:%SZ)"
     if ! security add-generic-password -U -s "$SERVICE" -a "$ACCOUNT" -w "$VALUE" -j "$COMMENT" 2>/dev/null; then
       echo "{\"error\": \"Failed to write secret to Keychain: $ACCOUNT\"}" >&2
       exit 1

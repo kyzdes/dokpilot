@@ -1,4 +1,4 @@
-# VPS Ninja v3.1 — Benchmark Results
+# Dokpilot v3.1 — Benchmark Results
 
 **Date:** 2026-04-08
 **Model:** Claude Sonnet 4.6 (`claude -p` non-interactive mode)
@@ -16,7 +16,7 @@
 
 ### Eval 1: Deploy Next.js App
 
-**Prompt:** `/vps deploy github.com/kyzdes/my-nextjs-app --domain app.kyzdes.com`
+**Prompt:** `/dokpilot deploy github.com/kyzdes/my-nextjs-app --domain app.kyzdes.com`
 
 | Assertion | With Skill | Without Skill |
 |:----------|:-----------|:--------------|
@@ -50,7 +50,7 @@
 
 ### Eval 3: Setup VPS
 
-**Prompt:** `/vps setup <server-ip> <root-password>`
+**Prompt:** `/dokpilot setup <server-ip> <root-password>`
 
 | Assertion | With Skill | Without Skill |
 |:----------|:-----------|:--------------|
@@ -96,7 +96,7 @@
 
 ```bash
 # With skill (from project directory)
-claude -p "/vps deploy github.com/kyzdes/my-nextjs-app --domain app.kyzdes.com" --model sonnet
+claude -p "/dokpilot deploy github.com/kyzdes/my-nextjs-app --domain app.kyzdes.com" --model sonnet
 
 # Without skill
 claude -p "Deploy a Next.js app from github.com/kyzdes/my-nextjs-app to a VPS with Dokploy..." --model sonnet --disable-slash-commands

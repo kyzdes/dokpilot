@@ -1,10 +1,10 @@
-# PRD: VPS Ninja — Claude Code Skill for VPS Automation
+# PRD: Dokpilot — Claude Code Skill for VPS Automation
 
 ## 1. Overview
 
 ### What is it
 
-**VPS Ninja** is a private Claude Code skill that turns Claude into a full-fledged DevOps engineer. Through simple text commands, users can set up a VPS from scratch, deploy any project from GitHub, and automatically configure domains via CloudFlare — all without manual work with servers and control panels.
+**Dokpilot** is a private Claude Code skill that turns Claude into a full-fledged DevOps engineer. Through simple text commands, users can set up a VPS from scratch, deploy any project from GitHub, and automatically configure domains via CloudFlare — all without manual work with servers and control panels.
 
 ### Problem
 
@@ -19,14 +19,14 @@
 One skill for Claude Code covering the full lifecycle:
 
 ```
-/vps setup 123.45.67.89 root:password    → configured VPS with Dokploy
-/vps deploy github.com/user/repo          → running project on server
-/vps domain app.example.com project-name   → domain with SSL attached
+/dokpilot setup 123.45.67.89 root:password    → configured VPS with Dokploy
+/dokpilot deploy github.com/user/repo          → running project on server
+/dokpilot domain app.example.com project-name   → domain with SSL attached
 ```
 
 ### Target user
 
-Single user — project author. The skill is private, stored in `~/.claude/skills/vps/`.
+Single user — project author. The skill is private, stored in `~/.claude/skills/dokpilot/`.
 
 ---
 
@@ -39,16 +39,16 @@ Single user — project author. The skill is private, stored in `~/.claude/skill
 │                      Claude Code                          │
 │                                                           │
 │  ┌───────────────────────────────────────────────────┐   │
-│  │           VPS Ninja Skill (SKILL.md)               │   │
+│  │           Dokpilot Skill (SKILL.md)               │   │
 │  │                                                     │   │
-│  │  /vps setup    → SSH → Install Dokploy             │   │
-│  │  /vps deploy   → Dokploy tRPC API → Deploy App    │   │
-│  │  /vps domain   → CF API + Dokploy API → Domain    │   │
-│  │  /vps db       → Dokploy API → Database            │   │
-│  │  /vps status   → Dokploy API + SSH → Status        │   │
-│  │  /vps logs     → SSH + Dokploy API → Logs          │   │
-│  │  /vps destroy  → Dokploy API + CF API → Cleanup    │   │
-│  │  /vps config   → Local JSON → Configuration        │   │
+│  │  /dokpilot setup    → SSH → Install Dokploy             │   │
+│  │  /dokpilot deploy   → Dokploy tRPC API → Deploy App    │   │
+│  │  /dokpilot domain   → CF API + Dokploy API → Domain    │   │
+│  │  /dokpilot db       → Dokploy API → Database            │   │
+│  │  /dokpilot status   → Dokploy API + SSH → Status        │   │
+│  │  /dokpilot logs     → SSH + Dokploy API → Logs          │   │
+│  │  /dokpilot destroy  → Dokploy API + CF API → Cleanup    │   │
+│  │  /dokpilot config   → Local JSON → Configuration        │   │
 │  └───────────────────────────────────────────────────┘   │
 │                          │                                │
 │              ┌───────────┼───────────┐                    │
@@ -81,7 +81,7 @@ Single user — project author. The skill is private, stored in `~/.claude/skill
 ### Configuration storage
 
 ```
-~/.claude/skills/vps/
+~/.claude/skills/dokpilot/
 ├── SKILL.md                    # Main skill with routing and inline commands
 ├── config/
 │   └── servers.json            # Server credentials registry (gitignored)
@@ -131,18 +131,18 @@ Single user — project author. The skill is private, stored in `~/.claude/skill
 }
 ```
 
-> **Security:** `servers.json` is stored locally in `~/.claude/skills/vps/config/` only. Never committed to repositories. The skill asks for credentials on first run and saves them.
+> **Security:** `servers.json` is stored locally in `~/.claude/skills/dokpilot/config/` only. Never committed to repositories. The skill asks for credentials on first run and saves them.
 
 ---
 
 ## 3. Commands
 
-### 3.1 `/vps setup` — Set up VPS from scratch
+### 3.1 `/dokpilot setup` — Set up VPS from scratch
 
 **Syntax:**
 ```
-/vps setup <ip> <root-password>
-/vps setup                          # prompts for IP and password
+/dokpilot setup <ip> <root-password>
+/dokpilot setup                          # prompts for IP and password
 ```
 
 **What it does:**
@@ -165,11 +165,11 @@ Single user — project author. The skill is private, stored in `~/.claude/skill
 
 ---
 
-### 3.2 `/vps deploy` — Deploy a project
+### 3.2 `/dokpilot deploy` — Deploy a project
 
 **Syntax:**
 ```
-/vps deploy <github-url> [--server <name>] [--domain <domain>] [--branch <branch>] [--dry-run]
+/dokpilot deploy <github-url> [--server <name>] [--domain <domain>] [--branch <branch>] [--dry-run]
 ```
 
 **Phase 1 — Project analysis (automatic):**
@@ -209,13 +209,13 @@ Single user — project author. The skill is private, stored in `~/.claude/skill
 
 ---
 
-### 3.3 `/vps domain` — Domain management
+### 3.3 `/dokpilot domain` — Domain management
 
 **Syntax:**
 ```
-/vps domain add <domain> <project-name> [--port <port>] [--server <name>]
-/vps domain remove <domain>
-/vps domain list [--server <name>]
+/dokpilot domain add <domain> <project-name> [--port <port>] [--server <name>]
+/dokpilot domain remove <domain>
+/dokpilot domain list [--server <name>]
 ```
 
 **What `add` does:**
@@ -228,13 +228,13 @@ Single user — project author. The skill is private, stored in `~/.claude/skill
 
 ---
 
-### 3.4 `/vps db` — Database management
+### 3.4 `/dokpilot db` — Database management
 
 **Syntax:**
 ```
-/vps db create <type> <name> [--project <project>] [--server <name>]
-/vps db list [--server <name>]
-/vps db delete <name>
+/dokpilot db create <type> <name> [--project <project>] [--server <name>]
+/dokpilot db list [--server <name>]
+/dokpilot db delete <name>
 ```
 
 **Supported types:** `postgres`, `mysql`, `mariadb`, `mongo`, `redis`
@@ -243,11 +243,11 @@ All `*.create` calls require `environmentId` (Dokploy v0.27+).
 
 ---
 
-### 3.5 `/vps status` — Server and project status
+### 3.5 `/dokpilot status` — Server and project status
 
 **Syntax:**
 ```
-/vps status [--server <name>]
+/dokpilot status [--server <name>]
 ```
 
 **What it does:**
@@ -261,11 +261,11 @@ All `*.create` calls require `environmentId` (Dokploy v0.27+).
 
 ---
 
-### 3.6 `/vps logs` — View logs
+### 3.6 `/dokpilot logs` — View logs
 
 **Syntax:**
 ```
-/vps logs <project-name> [--lines <n>] [--build]
+/dokpilot logs <project-name> [--lines <n>] [--build]
 ```
 
 - **Runtime logs** (default): `docker service logs`
@@ -273,26 +273,26 @@ All `*.create` calls require `environmentId` (Dokploy v0.27+).
 
 ---
 
-### 3.7 `/vps destroy` — Delete project
+### 3.7 `/dokpilot destroy` — Delete project
 
 **Syntax:**
 ```
-/vps destroy <project-name> [--keep-db] [--keep-dns] [--server <name>]
+/dokpilot destroy <project-name> [--keep-db] [--keep-dns] [--server <name>]
 ```
 
 **Always** asks for confirmation before deleting. Shows what will be removed.
 
 ---
 
-### 3.8 `/vps config` — Configuration management
+### 3.8 `/dokpilot config` — Configuration management
 
 **Syntax:**
 ```
-/vps config                          # Show config (without secrets)
-/vps config cloudflare <api-token>   # Configure CloudFlare
-/vps config server add <name> <ip>   # Add server
-/vps config server remove <name>     # Remove server
-/vps config default <server-name>    # Set default server
+/dokpilot config                          # Show config (without secrets)
+/dokpilot config cloudflare <api-token>   # Configure CloudFlare
+/dokpilot config server add <name> <ip>   # Add server
+/dokpilot config server remove <name>     # Remove server
+/dokpilot config default <server-name>    # Set default server
 ```
 
 ---

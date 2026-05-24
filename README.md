@@ -1,4 +1,4 @@
-# vps-ninja
+# dokpilot
 
 > Deploy and manage applications on VPS servers with Dokploy (Claude Code / Codex / Gemini skill).
 
@@ -6,19 +6,19 @@
 
 ### Claude Code
 
-    /plugin install https://github.com/kyzdes/vps-ninja
+    /plugin install https://github.com/kyzdes/dokpilot
     # or via marketplace:
     /plugin marketplace add kyzdes/marketplace-skills
-    /plugin install vps-ninja@kyzdes-skills
+    /plugin install dokpilot@kyzdes-skills
 
 ### Codex CLI / Gemini CLI
 
     curl -sSL https://raw.githubusercontent.com/kyzdes/marketplace-skills/main/install.sh \
-      | bash -s <codex|gemini> vps-ninja
+      | bash -s <codex|gemini> dokpilot
 
 ## Updates
 
-Claude: `/plugin update vps-ninja`
+Claude: `/plugin update dokpilot`
 Codex/Gemini: `install.sh update <agent>`
 
 ---
@@ -30,27 +30,27 @@ Codex/Gemini: `install.sh update <agent>`
   <img src="https://img.shields.io/badge/license-MIT-gray?style=flat-square" alt="License" />
 </p>
 
-# VPS Ninja
+# Dokpilot
 
 > One command to go from a GitHub repo to a live app with SSL, domain, and auto-deploy on push.
 
 ```
-/vps deploy github.com/user/my-app --domain app.example.com
+/dokpilot deploy github.com/user/my-app --domain app.example.com
 ```
 
-VPS Ninja is a [Claude Code skill](https://docs.anthropic.com/en/docs/claude-code/skills) that turns Claude into a DevOps engineer for your VPS. It automates the full lifecycle through [Dokploy](https://dokploy.com) and CloudFlare DNS — setup, deploy, domains, databases, monitoring, and teardown.
+Dokpilot is a [Claude Code skill](https://docs.anthropic.com/en/docs/claude-code/skills) that turns Claude into a DevOps engineer for your VPS. It automates the full lifecycle through [Dokploy](https://dokploy.com) and CloudFlare DNS — setup, deploy, domains, databases, monitoring, and teardown.
 
 ---
 
 ## Benchmarks
 
-We tested Claude with and without VPS Ninja across 3 real-world DevOps scenarios:
+We tested Claude with and without Dokpilot across 3 real-world DevOps scenarios:
 
 <table>
 <tr>
 <td width="50%">
 
-### With VPS Ninja
+### With Dokpilot
 - Pass rate: **100%**
 - Reads built-in references instantly
 - Uses correct tRPC API calls
@@ -60,7 +60,7 @@ We tested Claude with and without VPS Ninja across 3 real-world DevOps scenarios
 </td>
 <td width="50%">
 
-### Without VPS Ninja
+### Without Dokpilot
 - Pass rate: **24%**
 - Googles outdated Dokploy docs
 - Misses required API fields
@@ -71,7 +71,7 @@ We tested Claude with and without VPS Ninja across 3 real-world DevOps scenarios
 </tr>
 </table>
 
-> **Most revealing test:** When asked about auto-deploy, naked Claude recommends setting up webhooks — the exact opposite of how Dokploy works. VPS Ninja correctly explains that the GitHub App handles it automatically.
+> **Most revealing test:** When asked about auto-deploy, naked Claude recommends setting up webhooks — the exact opposite of how Dokploy works. Dokpilot correctly explains that the GitHub App handles it automatically.
 
 Full results: [`benchmarks/BENCHMARK.md`](benchmarks/BENCHMARK.md)
 
@@ -82,8 +82,8 @@ Full results: [`benchmarks/BENCHMARK.md`](benchmarks/BENCHMARK.md)
 ### 1. Install the skill
 
 ```bash
-git clone https://github.com/kyzdes/vps-ninja.git ~/vps-ninja
-ln -s ~/vps-ninja ~/.claude/skills/vps
+git clone https://github.com/kyzdes/dokpilot.git ~/dokpilot
+ln -s ~/dokpilot ~/.claude/skills/dokpilot
 ```
 
 ### 2. Install dependencies
@@ -99,7 +99,7 @@ sudo apt install jq sshpass
 ### 3. Set up your VPS
 
 ```
-/vps setup <server-ip> <root-password>
+/dokpilot setup <server-ip> <root-password>
 ```
 
 Claude SSHs in, installs Dokploy, configures the firewall, and walks you through creating an admin account.
@@ -107,7 +107,7 @@ Claude SSHs in, installs Dokploy, configures the firewall, and walks you through
 ### 4. Deploy
 
 ```
-/vps deploy github.com/user/app --domain app.example.com
+/dokpilot deploy github.com/user/app --domain app.example.com
 ```
 
 Claude detects your stack, creates the project in Dokploy, sets up DNS + SSL, deploys, and enables auto-deploy on push. Done.
@@ -118,18 +118,18 @@ Claude detects your stack, creates the project in Dokploy, sets up DNS + SSL, de
 
 | Command | Description |
 |:--------|:------------|
-| `/vps setup <ip> <password>` | Set up a fresh VPS with Dokploy |
-| `/vps deploy <url> [--domain D] [--dry-run]` | Deploy from GitHub |
-| `/vps domain add <domain> <project>` | Add domain with SSL |
-| `/vps domain remove <domain>` | Remove domain |
-| `/vps domain list` | List all domains |
-| `/vps db create <type> <name>` | Create database (postgres/mysql/mongo/redis) |
-| `/vps db list` | List databases |
-| `/vps db delete <name>` | Delete database |
-| `/vps status` | Server + project status with resource warnings |
-| `/vps logs <project> [--build]` | Runtime or build logs |
-| `/vps destroy <project>` | Delete project (with confirmation) |
-| `/vps config` | Manage servers and CloudFlare config |
+| `/dokpilot setup <ip> <password>` | Set up a fresh VPS with Dokploy |
+| `/dokpilot deploy <url> [--domain D] [--dry-run]` | Deploy from GitHub |
+| `/dokpilot domain add <domain> <project>` | Add domain with SSL |
+| `/dokpilot domain remove <domain>` | Remove domain |
+| `/dokpilot domain list` | List all domains |
+| `/dokpilot db create <type> <name>` | Create database (postgres/mysql/mongo/redis) |
+| `/dokpilot db list` | List databases |
+| `/dokpilot db delete <name>` | Delete database |
+| `/dokpilot status` | Server + project status with resource warnings |
+| `/dokpilot logs <project> [--build]` | Runtime or build logs |
+| `/dokpilot destroy <project>` | Delete project (with confirmation) |
+| `/dokpilot config` | Manage servers and CloudFlare config |
 
 All commands support `--server <name>` for multi-server setups.
 
@@ -156,9 +156,9 @@ Auto-detected from your project files:
 ## How It Works
 
 ```
-You: /vps deploy github.com/user/app --domain app.example.com
+You: /dokpilot deploy github.com/user/app --domain app.example.com
 
-VPS Ninja:
+Dokpilot:
   1. Clones repo, detects Next.js + Prisma + PostgreSQL
   2. Asks for secret env vars (NEXTAUTH_SECRET, etc.)
   3. Creates project + PostgreSQL in Dokploy
@@ -188,7 +188,7 @@ GitHub App (recommended)
 ## Architecture
 
 ```
-VPS-NINJA/
+dokpilot/
 ├── SKILL.md                    # Skill logic and command routing
 ├── scripts/
 │   ├── dokploy-api.sh          # Dokploy tRPC API client (dynamic timeouts)
@@ -228,10 +228,10 @@ VPS-NINJA/
 
 ## Optional: MCP Server
 
-VPS Ninja includes a bundled MCP server for always-fresh Dokploy documentation:
+Dokpilot includes a bundled MCP server for always-fresh Dokploy documentation:
 
 ```bash
-cd ~/.claude/skills/vps/mcp-server && npm install
+cd ~/.claude/skills/dokpilot/mcp-server && npm install
 ```
 
 Add to `~/.claude/.mcp.json`:
@@ -277,4 +277,4 @@ MIT
 
 ## Contributing
 
-PRs welcome. If you find a bug or want to add support for a new stack, [open an issue](https://github.com/kyzdes/vps-ninja/issues).
+PRs welcome. If you find a bug or want to add support for a new stack, [open an issue](https://github.com/kyzdes/dokpilot/issues).

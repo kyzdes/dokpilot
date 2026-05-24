@@ -32,7 +32,7 @@ _load_server_config() {
   local config="$script_dir/../config/servers.json"
 
   if [ ! -f "$config" ]; then
-    echo '{"error": "Config not found. Run: /vps config server add <name> <ip>"}' >&2
+    echo '{"error": "Config not found. Run: /dokpilot config server add <name> <ip>"}' >&2
     exit 1
   fi
 
@@ -88,7 +88,7 @@ if [ "${1:-}" = "--bg" ]; then
   shift
   SERVER="${1:?Usage: ssh-exec.sh --bg <server-name> <command> [log-file]}"
   CMD="${2:?Missing command}"
-  LOG_FILE="${3:-/tmp/vps-ninja-bg-$(date +%s).log}"
+  LOG_FILE="${3:-/tmp/dokpilot-bg-$(date +%s).log}"
 
   _load_server_config "$SERVER"
 

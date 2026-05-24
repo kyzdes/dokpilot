@@ -24,7 +24,7 @@
 ### 1. Клонирование и подготовка (локально)
 
 ```bash
-TEMP_DIR="/tmp/vps-ninja-$(date +%s)"
+TEMP_DIR="/tmp/dokpilot-$(date +%s)"
 git clone --depth 1 --branch "$BRANCH" "$GITHUB_URL" "$TEMP_DIR"
 ```
 

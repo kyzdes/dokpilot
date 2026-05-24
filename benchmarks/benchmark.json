@@ -1,6 +1,6 @@
 {
   "metadata": {
-    "skill_name": "vps",
+    "skill_name": "dokpilot",
     "skill_version": "v3.1.1",
     "skill_path": "/Users/viacheslavkuznetsov/Desktop/Projects/VPS-NINJA",
     "executor_model": "claude-sonnet-4-6",

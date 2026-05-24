@@ -1,6 +1,6 @@
 # Dokploy API Reference
 
-Справочник основных Dokploy REST API endpoints, используемых в VPS Ninja.
+Справочник основных Dokploy REST API endpoints, используемых в Dokpilot.
 
 Полная документация: https://docs.dokploy.com/docs/api
 
