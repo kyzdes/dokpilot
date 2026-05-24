@@ -74,6 +74,7 @@ const router = buildRouter([
   require("./routes/streams"),
   require("./routes/jobs"),
   require("./routes/writes"),
+  require("./routes/assistant"),
 ]);
 
 /* ─── helpers ───────────────────────────────────────────────────── */

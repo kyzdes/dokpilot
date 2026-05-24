@@ -127,12 +127,75 @@ window.pageInit = ({ el, icon, toast }) => {
 
   function userSay(text) { addMsg("user", () => el("div", { class:"bubble" }, text)); }
 
-  function aiReply(prompt) {
-    const a = ANSWERS.find(x => x.match.test(prompt)) || ANSWERS[ANSWERS.length-1];
+  async function aiReply(prompt) {
     const bubble = el("div", { class:"bubble" });
     const stepWrap = el("div");
     addMsg("ai", () => el("div", null, stepWrap, bubble));
-    // stream tool steps then text
+
+    // LIVE PATH: spawn a real Claude subprocess via /api/assistant and
+    // stream its tool calls + text via SSE.
+    if (window.Dok?.live && window.Dok?.postAction) {
+      try {
+        const resp = await window.Dok.postAction("/api/assistant", { prompt });
+        if (resp.__error) {
+          bubble.innerHTML = "(API error: " + (resp.message || ("HTTP " + resp.status)) + ")";
+          return;
+        }
+        const tok = window.__DOKPILOT_TOKEN__;
+        const es = new EventSource(`/api/assistant/${resp.session_id}/stream?t=${encodeURIComponent(tok)}`);
+        let textSoFar = "";
+
+        es.addEventListener("info", () => {
+          stepWrap.append(el("div", { class:"tool-step" }, icon("terminal",12), "Spawned Claude session"));
+        });
+        es.addEventListener("delta", (e) => {
+          try {
+            const { parts } = JSON.parse(e.data);
+            for (const p of parts) {
+              if (p.kind === "text") {
+                textSoFar = p.text;
+                bubble.textContent = textSoFar;
+              } else if (p.kind === "tool_use") {
+                stepWrap.append(el("div", { class:"tool-step" }, icon("terminal",12),
+                  p.name + ": " + JSON.stringify(p.input || {}).slice(0, 80)));
+              } else if (p.kind === "thinking") {
+                stepWrap.append(el("div", { class:"tool-step", style:{opacity:"0.6"} }, icon("spark",12), p.text.slice(0, 140)));
+              }
+            }
+            thread.scrollTop = thread.scrollHeight;
+          } catch {}
+        });
+        es.addEventListener("tool_result", (e) => {
+          try {
+            const { results } = JSON.parse(e.data);
+            for (const r of results) {
+              stepWrap.append(el("div", { class:"tool-step", style:{color: r.error ? "var(--danger)" : "var(--muted)"} },
+                icon(r.error ? "warn" : "check", 12),
+                r.content.split("\n")[0].slice(0, 100)));
+            }
+          } catch {}
+        });
+        es.addEventListener("done", (e) => {
+          try {
+            const d = JSON.parse(e.data);
+            if (d.text) bubble.textContent = d.text;
+            const stats = el("div", { class:"hint", style:{marginTop:"8px",fontSize:"var(--text-sm)"} },
+              Math.round((d.duration_ms||0)/100)/10 + "s",
+              d.cost_usd ? " · $" + d.cost_usd.toFixed(4) : "");
+            bubble.append(stats);
+          } catch {}
+          es.close();
+        });
+        es.addEventListener("error", () => { /* EventSource will retry; if real fail, "exit" closes */ });
+        es.addEventListener("exit", () => { es.close(); });
+        return;
+      } catch (err) {
+        bubble.innerHTML = "(Live mode failed: " + err.message + ") — falling back to canned response";
+      }
+    }
+
+    // MOCK PATH: canned regex-matched responses (when no live backend)
+    const a = ANSWERS.find(x => x.match.test(prompt)) || ANSWERS[ANSWERS.length-1];
     let s = 0;
     const runStep = () => {
       if (s < a.steps.length) {

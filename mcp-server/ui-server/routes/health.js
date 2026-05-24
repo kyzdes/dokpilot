@@ -9,8 +9,8 @@ module.exports = {
       port: ctx.port,
       pid: process.pid,
       uptime_s: Math.round(process.uptime()),
-      milestone: "M6 (Epic 3.5: write actions)",
-      next: "M7 (Epic 4): Claude console + /api/assistant",
+      milestone: "M7 (Epic 4: Claude console) — all milestones live",
+      next: "future: real Claude worker replacing lib/mock-worker.js",
       ui_root: ctx.uiRoot,
     });
   },
