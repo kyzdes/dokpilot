@@ -93,9 +93,29 @@ window.pageInit = ({ el, icon, badge, toast, DATA, askClaude }) => {
     });
   }
 
+  // Track which app ids we've already hydrated with detail (env keys,
+  // real domain, repo/branch) so we only fetch once per app.
+  const hydrated = new Set();
+  async function hydrateDetail(a) {
+    if (!window.Dok?.live || !window.Dok?.api || hydrated.has(a.id)) return;
+    hydrated.add(a.id);
+    const r = await window.Dok.api(`/api/apps/${encodeURIComponent(a.id)}?server=${encodeURIComponent(a.server)}`);
+    if (r.__error) { hydrated.delete(a.id); return; }
+    // Patch the app in place with detail fields
+    a.env = r.env_keys || [];
+    if (r.domains && r.domains[0]) a.domain = r.domains[0].host;
+    if (r.stack) a.stack = r.stack;
+    if (r.repo) a.repo = r.repo;
+    if (r.branch) a.branch = r.branch;
+    if (typeof r.autodeploy === "boolean") a.autodeploy = r.autodeploy;
+    if (a.id === current) renderDetail();   // re-render with the real env list
+  }
+
   function renderDetail() {
     const a = DATA.apps[current];
     detailEl.innerHTML = "";
+    // Kick a lazy detail fetch (env keys, real domain) — re-renders when it lands
+    hydrateDetail(a);
 
     // header
     const head = el("section", { class:"card card-pad mb-4" },

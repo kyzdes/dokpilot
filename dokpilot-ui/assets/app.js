@@ -613,6 +613,18 @@ async function bootData() {
   Object.assign(window.Dok || (window.Dok = {}), { api, live: true });
   document.documentElement.dataset.dataSource = "live";
 
+  // Replace MOCK meta (port/token/version) with the real launch values so
+  // settings.html + the topbar chip show the actual listen address.
+  if (!h.__error) {
+    DATA.meta = DATA.meta || {};
+    if (h.port) DATA.meta.port = h.port;
+    if (h.version) DATA.meta.version = h.version;
+    // token preview: first 4 + last 4 of the real token (never the full value
+    // beyond what's already in window.__DOKPILOT_TOKEN__)
+    const tok = window.__DOKPILOT_TOKEN__;
+    if (tok && tok.length > 10) DATA.meta.token = tok.slice(0, 4) + "…" + tok.slice(-4);
+  }
+
   // Live in-flight job — replace MOCK DATA.job with the latest real
   // non-terminal job, or clear it if none. The OD pageInit on index.html
   // / overview reads DATA.job to render the "Deploy in flight" card;
