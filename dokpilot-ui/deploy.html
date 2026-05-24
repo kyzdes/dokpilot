@@ -148,6 +148,13 @@ window.pageInit = ({ el, icon, badge, toast, DATA, askClaude }) => {
   /* ── state 2: in-flight (streaming + Q&A) ── */
   function startDeploy() {
     const repo = (document.getElementById("repo")?.value || DATA.job.repo).replace(/^https?:\/\//,"");
+
+    // LIVE PATH: real job creation + SSE subscription via ui-server.
+    // Bypasses the MOCK simulation block below when behind /dokpilot ui.
+    if (window.Dok?.live && window.Dok?.api) {
+      return startLiveDeploy(repo);
+    }
+
     renderStepper(0, 1);
     wrap.innerHTML = "";
 
@@ -226,6 +233,186 @@ window.pageInit = ({ el, icon, badge, toast, DATA, askClaude }) => {
         el("a", { class:"btn btn-primary", href:"https://notes.kyzdes.dev", target:"_blank" }, "Open site", icon("ext", 13)),
         el("a", { class:"btn", href:"projects.html?app=app_001" }, "Manage app"),
         el("button", { class:"btn btn-ghost", onclick:renderForm }, "Deploy another"))));
+  }
+
+  /* ── LIVE deploy path (Epic 3) ───────────────────────────────────────
+     Creates a real job via POST /api/jobs/deploy, then subscribes to
+     /api/jobs/:id/stream (SSE). Each `job` event re-renders the wizard
+     based on the authoritative job state from the backend.
+  */
+  let liveES = null;
+  async function startLiveDeploy(repo) {
+    renderStepper(0, 1);
+    wrap.innerHTML = "";
+
+    // Header card — repo + target + a live job pill (id filled when known)
+    const headerJobIdSpan = el("span", { class:"dim-mono grow" }, "starting…");
+    const headerCard = el("section", { class:"card mb-4" },
+      el("div", { class:"card-head" },
+        el("h3", null, repo),
+        badge("building")),
+      el("div", { class:"card-pad row wrap", style:{gap:"10px"} },
+        el("span", { class:"pill" }, icon("server", 10), "→ " + chosen),
+        el("span", { class:"pill", "data-adv":"" }, icon("branch", 10), "main"),
+        headerJobIdSpan));
+
+    // Log viewer card
+    const logPre = el("pre", { class:"log-viewer mono", "aria-live":"polite", style:{maxHeight:"320px"} });
+    const cursor = el("div", { class:"log-line log-cursor mono" }, el("span",{class:"log-t"},"…"), el("span",{class:"log-text"},"connecting…"));
+    const logCard = el("section", { class:"card" },
+      el("div", { class:"card-head" }, el("h3", null, el("span",{ "data-adv":"" },"Live log"), el("span",{ "data-simple":"" },"What Claude is doing")),
+        el("span", { class:"card-head-meta row", style:{display:"inline-flex",gap:"6px"} }, el("span",{class:"dot dot-info dot-pulse"}), "streaming")),
+      el("div", { class:"card-pad" }, logPre));
+    logPre.append(cursor);
+
+    wrap.append(headerCard, logCard);
+
+    // Q&A panel — re-rendered every job update; track previous question
+    // IDs so we don't blow away in-progress user input on re-render
+    let qaCard = null;
+    let renderedLogLen = 0;
+
+    function syncLog(job) {
+      // Append only new lines
+      const lines = job.log || [];
+      for (let i = renderedLogLen; i < lines.length; i++) {
+        const l = lines[i];
+        logPre.insertBefore(
+          el("div", { class:"log-line log-kind-" + l.kind },
+            el("span", { class:"log-t" }, l.t),
+            el("span", { class:"log-text" }, l.text)),
+          cursor);
+      }
+      renderedLogLen = lines.length;
+      logPre.scrollTop = logPre.scrollHeight;
+    }
+
+    function syncStepper(job) {
+      // Map job.steps onto the stepper. status: pending/active/done/error
+      const order = ["detect","questions","deploy","dns","finalize"];
+      const states = order.map(id => job.steps?.find(s => s.id === id)?.status || "pending");
+      const activeIdx = states.indexOf("active");
+      const doneTo = states.filter(s => s === "done").length;
+      const errorIdx = states.indexOf("error");
+      renderStepper(activeIdx >= 0 ? activeIdx : doneTo, doneTo, errorIdx);
+    }
+
+    function syncQA(job) {
+      const isAsking = job.status === "awaiting-answers" && (job.questions || []).some(q => q.required && (q.answer == null || q.answer === ""));
+      if (!isAsking) {
+        if (qaCard) { qaCard.remove(); qaCard = null; }
+        return;
+      }
+      if (qaCard) return; // already rendered — don't re-render and lose typed input
+
+      qaCard = el("section", { class:"card mb-4" },
+        el("div", { class:"card-head" },
+          el("div", { class:"row", style:{gap:"8px"} }, el("span",{class:"dot dot-warning dot-pulse"}),
+            el("h3", null, el("span",{ "data-adv":"" },"Claude needs " + job.questions.length + " answers"), el("span",{ "data-simple":"" },"A few quick questions"))),
+          el("button", { class:"ask-claude", "data-claude":"fill-env" }, icon("spark", 13),
+            el("span", null, el("span",{ "data-adv":"" },"Suggest values"), el("span",{ "data-simple":"" },"Fill these for me")))),
+        el("div", { class:"card-pad stack" },
+          ...job.questions.map((q, idx) => el("div", { class:"field" },
+            el("label", null, q.label),
+            q.type === "select"
+              ? el("select", { class:"select mono", id:"qa-" + q.id },
+                  el("option",{value:"",selected:"true",disabled:"true"},"choose…"),
+                  ...(q.options || q.opts || []).map(o => el("option", { value:o }, o)))
+              : el("input", { class:"input mono", id:"qa-" + q.id, placeholder:q.placeholder || q.ph || "", autofocus: idx===0 ? "true" : null }),
+            q.hint ? el("div", { class:"hint" }, q.hint) : null)),
+          el("div", { class:"row-between", style:{marginTop:"4px"} },
+            el("button", { class:"btn btn-ghost", onclick:() => { liveES?.close(); renderForm(); } }, "Cancel deploy"),
+            el("button", { class:"btn btn-primary", onclick:() => submitAnswers(job) }, "Submit & continue", icon("chevron", 14)))));
+      wrap.insertBefore(qaCard, logCard);
+    }
+
+    async function submitAnswers(job) {
+      const csrfToken = window.__DOKPILOT_TOKEN__;
+      for (const q of job.questions) {
+        if (q.answer != null && q.answer !== "") continue;
+        const inputEl = document.getElementById("qa-" + q.id);
+        if (!inputEl) continue;
+        const answer = inputEl.value;
+        if (!answer) { toast("Please answer all required fields", "warn"); return; }
+        await window.Dok.api(`/api/jobs/${job.id}/answer`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "X-CSRF": csrfToken },
+          body: JSON.stringify({ questionId: q.id, answer }),
+        });
+      }
+      // Clear and let the SSE re-render (qaCard will be removed when status flips)
+      if (qaCard) { qaCard.remove(); qaCard = null; }
+    }
+
+    function renderDone(job) {
+      if (liveES) { liveES.close(); liveES = null; }
+      const url = job.result?.url || ("https://" + (job.domain || repo.split("/").pop() + ".kyzdes.dev"));
+      wrap.innerHTML = "";
+      const simple = document.documentElement.dataset.mode === "simple";
+      renderStepper(simple ? 2 : 4, simple ? 3 : 5);
+      toast("Deployed — " + url.replace(/^https?:\/\//,"") + " is live", "check");
+      wrap.append(el("section", { class:"card card-pad", style:{textAlign:"center",borderColor:"var(--accent-line)",background:"linear-gradient(180deg,var(--accent-soft),transparent)"} },
+        el("div", { style:{width:"52px",height:"52px",margin:"8px auto 16px",borderRadius:"50%",background:"var(--accent)",color:"var(--accent-on)",display:"grid",placeItems:"center",boxShadow:"0 0 24px var(--accent-glow)"} }, icon("check", 26)),
+        el("h2", { style:{fontSize:"var(--text-3xl)"} }, el("span",{ "data-adv":"" },"Deploy complete"), el("span",{ "data-simple":"" },"Your app is live")),
+        el("p", { class:"page-lead", style:{margin:"8px auto 20px"} }, "Running with HTTPS" + (job.questions?.find(q=>q.id==='q_autodeploy')?.answer?.includes('yes') ? " and auto-deploy on push." : ".")),
+        el("div", { class:"codeblock", style:{maxWidth:"480px",margin:"0 auto 20px"} },
+          icon("globe", 14), el("span", { class:"grow" }, url),
+          el("button", { class:"icon-btn", "data-copy":url, title:"Copy" }, icon("copy", 14))),
+        el("div", { class:"row", style:{justifyContent:"center",gap:"10px"} },
+          el("a", { class:"btn btn-primary", href:url, target:"_blank" }, "Open site", icon("ext", 13)),
+          el("a", { class:"btn", href:"projects.html" }, "Manage app"),
+          el("button", { class:"btn btn-ghost", onclick:renderForm }, "Deploy another"))));
+    }
+
+    function renderError(job) {
+      if (liveES) { liveES.close(); liveES = null; }
+      cursor.remove();
+      const errBanner = el("section", { class:"callout warn mb-4" },
+        icon("warn", 15),
+        el("div", null,
+          el("strong", null, "Deploy failed: "),
+          job.error || "see log above for details"));
+      wrap.insertBefore(errBanner, logCard);
+    }
+
+    // ── Kick the job ──
+    try {
+      const csrfToken = window.__DOKPILOT_TOKEN__;
+      const res = await window.Dok.api("/api/jobs/deploy", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-CSRF": csrfToken },
+        body: JSON.stringify({
+          repo,
+          server: chosen,
+          branch: document.querySelector('[data-adv] input[value="main"]')?.value || "main",
+          domain: document.querySelector('input[placeholder="notes.kyzdes.dev"]')?.value || null,
+        }),
+      });
+      if (res.__error) {
+        cursor.querySelector(".log-text").textContent = "Failed to start: HTTP " + res.status;
+        return;
+      }
+      headerJobIdSpan.textContent = "job " + res.id;
+
+      // Subscribe to job stream — bearer token via ?t= because
+      // EventSource doesn't support custom headers
+      const streamUrl = `/api/jobs/${encodeURIComponent(res.id)}/stream?t=${encodeURIComponent(csrfToken)}`;
+      liveES = new EventSource(streamUrl);
+      liveES.addEventListener("job", (e) => {
+        try {
+          const job = JSON.parse(e.data);
+          syncLog(job);
+          syncStepper(job);
+          syncQA(job);
+          if (job.status === "done") renderDone(job);
+          if (job.status === "error") renderError(job);
+        } catch {}
+      });
+      liveES.addEventListener("not-found", () => { cursor.querySelector(".log-text").textContent = "Job vanished from queue."; liveES.close(); });
+      liveES.addEventListener("error", () => { /* EventSource auto-reconnects */ });
+    } catch (err) {
+      cursor.querySelector(".log-text").textContent = "Connection failed: " + err.message;
+    }
   }
 
   renderForm();
