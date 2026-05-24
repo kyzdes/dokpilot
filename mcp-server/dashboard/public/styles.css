@@ -1,98 +1,86 @@
 /* Dokpilot Companion Dashboard · styles.css
-   Mirrors keys-keeper token shape, swaps accent to neon-green.
-   No build step; Tailwind not used. Vanilla CSS variables only. */
+   Component-level styles. Tokens come from the canonical Open Design system at
+   `open-design/design-systems/dokpilot/tokens.css`, copied here as
+   `./tokens.css` and loaded BEFORE this file from index.html.
 
-/* ─── tokens ─────────────────────────────────────────────────────── */
+   This file only declares:
+   - Backward-compat aliases for legacy local names (--text-*, --warning, etc.)
+     that mirror the OD canonical tokens
+   - Custom shadows + row-pad-y density variants
+   - Theme/accent/density overrides
+   - All component CSS
+
+   To regenerate tokens from OD source:
+     cp open-design/design-systems/dokpilot/tokens.css \
+        mcp-server/dashboard/public/tokens.css
+*/
+
+/* ─── alias layer + custom extensions ─────────────────────────────── */
 :root {
-  /* Dark base (default) */
-  --bg:             #0a0b0c;
-  --bg-elevated:    #0e1011;
-  --surface:        #131517;
-  --surface-2:      #181b1e;
-  --surface-hover:  #1f2327;
-  --border:         #24282d;
-  --border-subtle:  #1c1f23;
-  --border-strong:  #2f343a;
+  /* aliases — keep prototype CSS readable while sourcing from OD tokens */
+  --text:          var(--fg);
+  --text-2:        var(--fg-2);
+  --text-3:        var(--muted);
+  --text-4:        var(--meta);
+  --border-subtle: var(--border-soft);
+  --border-strong: #2f343a;
+  --accent-ink:    var(--accent-on);
+  --accent-2:      #2bd60c;
+  --warning:       var(--warn);
+  --warning-soft:  var(--warn-soft);
+  --radius:        var(--radius-md);
+  --muted-soft:    rgba(108, 113, 120, 0.16);
 
-  --text:           #e8e9eb;
-  --text-2:         #a3a8af;
-  --text-3:         #6c7178;
-  --text-4:         #44484e;
-
-  /* Accent: neon-green (#39ff14) — replaces keys-keeper terracotta */
-  --accent:         #39ff14;
-  --accent-2:       #2bd60c;
-  --accent-soft:    rgba(57, 255, 20, 0.12);
-  --accent-line:    rgba(57, 255, 20, 0.34);
-  --accent-glow:    rgba(57, 255, 20, 0.18);
-  --accent-ink:     #061a02; /* foreground when on accent fill */
-
-  /* Status palette (compatible with keys-keeper semantics) */
-  --success:        #4ade80;
-  --success-soft:   rgba(74, 222, 128, 0.12);
-  --info:           #61a8ff;
-  --info-soft:      rgba(97, 168, 255, 0.12);
-  --warning:        #facc52;
-  --warning-soft:   rgba(250, 204, 82, 0.14);
-  --danger:         #ff6b6b;
-  --danger-soft:    rgba(255, 107, 107, 0.13);
-  --muted:          #6c7178;
-  --muted-soft:     rgba(108, 113, 120, 0.16);
-
-  --shadow-md:      0 1px 2px rgba(0,0,0,0.4), 0 4px 12px rgba(0,0,0,0.3);
-  --shadow-lg:      0 4px 8px rgba(0,0,0,0.5), 0 16px 32px rgba(0,0,0,0.4);
-  --shadow-accent:  0 0 0 1px var(--accent-line), 0 0 24px var(--accent-glow);
+  --shadow-md:     0 1px 2px rgba(0,0,0,0.4), 0 4px 12px rgba(0,0,0,0.3);
+  --shadow-lg:     var(--elev-raised);
+  --shadow-accent: 0 0 0 1px var(--accent-line), 0 0 24px var(--accent-glow);
 
   --row-pad-y: 8px;
   --row-pad-x: 14px;
-  --radius-sm: 4px;
-  --radius:    6px;
-  --radius-lg: 9px;
 }
 
-/* Accent tweaks (neon vs soft) */
+/* Accent tweaks (neon vs soft) — overrides OD identity --accent */
 :root[data-accent="soft"] {
   --accent:      #4ade80;
   --accent-2:    #2bb35a;
   --accent-soft: rgba(74, 222, 128, 0.12);
   --accent-line: rgba(74, 222, 128, 0.30);
   --accent-glow: rgba(74, 222, 128, 0.12);
-  --accent-ink:  #061a02;
+  --accent-on:   #061a02;
 }
 
-/* Density: compact / comfortable / spacious */
+/* Density: compact / comfortable / spacious — extends OD spacing */
 :root[data-density="compact"]     { --row-pad-y: 5px;  }
 :root[data-density="comfortable"] { --row-pad-y: 8px;  }
 :root[data-density="spacious"]    { --row-pad-y: 12px; }
 
-/* Light theme override */
+/* Light theme override — keeps OD identity token names */
 :root[data-theme="light"] {
   --bg:             #fafaf8;
   --bg-elevated:    #ffffff;
   --surface:        #ffffff;
+  --surface-1:      #ffffff;
   --surface-2:      #f3f4f1;
   --surface-hover:  #e9eae6;
   --border:         #d4d6d1;
-  --border-subtle:  #e3e5e0;
+  --border-soft:    #e3e5e0;
   --border-strong:  #b5b8b1;
 
-  --text:           #16181a;
-  --text-2:         #4a4f56;
-  --text-3:         #767b82;
-  --text-4:         #aeb2b8;
+  --fg:             #16181a;
+  --fg-2:           #4a4f56;
+  --muted:          #767b82;
+  --meta:           #aeb2b8;
 
   --accent:         #1ea84a;
-  --accent-2:       #157d36;
   --accent-soft:    rgba(30, 168, 74, 0.10);
   --accent-line:    rgba(30, 168, 74, 0.30);
   --accent-glow:    rgba(30, 168, 74, 0.10);
-  --accent-ink:     #ffffff;
+  --accent-on:      #ffffff;
 
   --success:        #1f9d56;
   --info:           #2563eb;
-  --warning:        #b35d00;
+  --warn:           #b35d00;
   --danger:         #c1272d;
-  --muted:          #767b82;
 
   --shadow-md:      0 1px 2px rgba(20,22,26,0.06), 0 4px 12px rgba(20,22,26,0.06);
   --shadow-lg:      0 4px 8px rgba(20,22,26,0.06), 0 16px 32px rgba(20,22,26,0.08);
