@@ -94,7 +94,9 @@ function createJob({ repo, server, branch = "main", domain = null }) {
       { id: "finalize",  label: "Finalize",       status: "pending" },
     ],
     questions: [],
-    log: [{ t: now.slice(11, 19), kind: "info", text: "Job created. Waiting for worker to pick up." }],
+    // Local-time HH:MM:SS matches the shell helpers' `date +%H:%M:%S` so
+    // log entries from JS + bash share the same clock in the UI.
+    log: [{ t: new Date().toTimeString().slice(0, 8), kind: "info", text: "Job created. Waiting for worker to pick up." }],
     result: null,
     error: null,
     worker: null,

@@ -10,12 +10,18 @@ const {
 } = require("../lib/jobs");
 const { listServerNames } = require("../lib/exec");
 
-/* Spawn the mock worker if no real Claude worker is hooked. The real
-   worker lands when the user runs `/dokpilot deploy --job <id>` from
-   Claude Code; the mock walks the job through states automatically so
-   the UI flow demos end-to-end without Claude running. */
-function spawnMockWorker(id) {
-  const workerPath = path.join(__dirname, "..", "lib", "mock-worker.js");
+/* Choose worker:
+   - DOKPILOT_WORKER=mock  → lib/mock-worker.js (deterministic demo loop, no
+                              Claude required, doesn't actually deploy)
+   - DOKPILOT_WORKER=claude → lib/claude-worker.js (default: spawns real
+                              Claude with deploy-guide + helpers; does an
+                              actual deploy)
+   Both are detached + unref'd so the ui-server can restart without
+   killing in-flight workers. */
+function spawnWorker(id) {
+  const which = process.env.DOKPILOT_WORKER || "claude";
+  const file = which === "mock" ? "mock-worker.js" : "claude-worker.js";
+  const workerPath = path.join(__dirname, "..", "lib", file);
   const child = spawn(process.execPath, [workerPath, id], {
     detached: true,
     stdio: "ignore",
@@ -100,12 +106,10 @@ async function createDeploy(req, res, ctx) {
     domain: domain || null,
   });
 
-  // Kick the mock worker so the demo flow advances. When the real
-  // Claude worker exists (Phase E·M5 worker), this should be replaced
-  // with a "worker dispatched" notification + the real entrypoint
-  // (e.g. invoking a backgrounded `claude code` call).
-  try { spawnMockWorker(job.id); } catch (e) {
-    console.error("[ui] mock-worker spawn failed:", e);
+  // Kick the worker. Default: claude-worker (real). Override with
+  // DOKPILOT_WORKER=mock to use the deterministic demo loop.
+  try { spawnWorker(job.id); } catch (e) {
+    console.error("[ui] worker spawn failed:", e);
   }
 
   json(res, 201, { id: job.id, job });

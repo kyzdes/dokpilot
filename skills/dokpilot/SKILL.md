@@ -408,6 +408,17 @@ Key improvements in v3.1:
 - The deploy report should mention: "Auto-deploy is active via GitHub App. Push to `<branch>` to trigger redeploy."
 - If user asks to redeploy, use `application.redeploy` API endpoint
 
+**`/dokpilot deploy --job <id>`** — worker mode (v4.0+).
+
+When invoked with `--job`, you are a backgrounded deploy worker driven by the dashboard's job queue. The job spec is at `$JOB_PATH` (env var). Use the helpers under `$HELPERS_DIR` (also env):
+
+- `update-status.sh <state>` — lifecycle transitions
+- `log.sh <kind> "<message>"` — append a log line
+- `ask-user.sh <id> "<label>" <type> "<extra>" "<hint>"` — blocking question
+- `set-result.sh key=value ...` — final result
+
+The full worker prompt + helper protocol is in `mcp-server/ui-server/lib/claude-worker.js`. The dashboard's `POST /api/jobs/deploy` already spawns this flow automatically — manual `/dokpilot deploy --job <id>` is only for restarting or debugging a stuck job.
+
 ### `/dokpilot ui` — Launch local web dashboard
 
 Launches the Dokpilot UI server (`mcp-server/ui-server/server.js`) on a random ephemeral 127.0.0.1 port with a per-session bearer token, then opens the dashboard in the default browser.
