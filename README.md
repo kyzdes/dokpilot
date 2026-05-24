@@ -1,5 +1,9 @@
 # dokpilot
 
+<p align="center">
+  <img src="https://raw.githubusercontent.com/kyzdes/dokpilot-landing/main/public/brand/banner.png" alt="Dokpilot — Deploy anything. One command. No DevOps." width="100%" />
+</p>
+
 > Deploy and manage applications on VPS servers with Dokploy (Claude Code / Codex / Gemini skill).
 
 ## Install
@@ -24,7 +28,7 @@ Codex/Gemini: `install.sh update <agent>`
 ---
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-v3.1.1-00FF41?style=flat-square" alt="Version" />
+  <img src="https://img.shields.io/badge/version-v4.0.0-00FF41?style=flat-square" alt="Version" />
   <img src="https://img.shields.io/badge/pass_rate-100%25-00FF41?style=flat-square" alt="Pass Rate" />
   <img src="https://img.shields.io/badge/stacks-20+-blue?style=flat-square" alt="Stacks" />
   <img src="https://img.shields.io/badge/license-MIT-gray?style=flat-square" alt="License" />
@@ -130,8 +134,29 @@ Claude detects your stack, creates the project in Dokploy, sets up DNS + SSL, de
 | `/dokpilot logs <project> [--build]` | Runtime or build logs |
 | `/dokpilot destroy <project>` | Delete project (with confirmation) |
 | `/dokpilot config` | Manage servers and CloudFlare config |
+| `/dokpilot ui` | Launch the local web dashboard (new in v4.0) |
 
 All commands support `--server <name>` for multi-server setups.
+
+---
+
+## Dashboard (new in v4.0)
+
+`/dokpilot ui` launches a local web dashboard at `http://127.0.0.1:<port>/`
+(bearer-token gated, 127.0.0.1-only) with:
+
+- **Servers + apps inventory** — live status from your configured Dokploy instances
+- **Deploy wizard** — paste a GitHub URL, answer the questions Claude asks, watch
+  the build stream live, click the resulting URL
+- **Live log tail** — SSE-streamed deploy logs via SSH `tail -f`
+- **Domains + DNS** — Dokploy domains × Cloudflare records, with one-click add
+- **Databases** — list, create (postgres / mysql / mariadb / mongo / redis)
+- **Claude console** — chat with Claude directly inside the dashboard; tool
+  calls and reasoning stream inline
+
+Backend is Node 20 stdlib only (zero npm deps), lives in
+[`mcp-server/ui-server/`](mcp-server/ui-server/). Start with `/dokpilot ui`,
+stop with `/dokpilot ui --stop`, status with `--status`.
 
 ---
 
@@ -253,7 +278,7 @@ Add to `~/.claude/.mcp.json`:
 | Document | Description |
 |:---------|:------------|
 | [`PRD.md`](PRD.md) | Product requirements, architecture, all commands |
-| [`CHANGELOG.md`](CHANGELOG.md) | Full version history (v1 → v3.1.1) |
+| [`CHANGELOG.md`](CHANGELOG.md) | Full version history (v1 → v4.0.0) |
 | [`fixed-errors.md`](fixed-errors.md) | 9 production bugs: root cause + solution |
 | [`context-map.md`](context-map.md) | Technical deep-dive for contributors |
 | [`benchmarks/BENCHMARK.md`](benchmarks/BENCHMARK.md) | Benchmark methodology and results |
@@ -262,8 +287,10 @@ Add to `~/.claude/.mcp.json`:
 
 ## Version History
 
-**Current: v3.1.1** (2026-03-18) — [Full changelog](CHANGELOG.md)
+**Current: v4.0.0** (2026-05-24) — [Full changelog](CHANGELOG.md)
 
+- v4.0: Rebrand to Dokpilot, Dokploy v0.29+ baseline, local web dashboard with deploy wizard & SSE log streaming, real Claude console
+- v3.2: macOS Keychain secret store (`scripts/secret-store.sh`)
 - v3.1: Fixed GitHub App integration, 4-tier deploy fallback, command injection fix, `--dry-run` mode
 - v3.0: Built-in reference guides, MCP server, benchmarks (100% pass rate)
 - v2.0: Dokploy v0.27 compatibility (`environmentId`)

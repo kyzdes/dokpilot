@@ -14,9 +14,23 @@ All notable changes to Dokpilot are documented in this file.
 - **In-repo skill directory:** `skills/vps/` → `skills/dokpilot/`. CI workflow and `scripts/sync-mirrors.sh` updated to match.
 - Plugin metadata (`.claude-plugin/plugin.json`, `gemini-extension.json`) bumped to v4.0.0 with new homepage / repository URLs.
 
-### Added
+### Added — Local web dashboard
 
+- **`/dokpilot ui`** — launches a local web dashboard at `http://127.0.0.1:<random-ephemeral-port>/`. Bearer-token gated, 127.0.0.1-only, strict Origin/Referer + CSRF on POSTs, HttpOnly cookie + injected `window.__DOKPILOT_TOKEN__` for `fetch()`. Subcommands: `--stop`, `--status`, `--no-open`.
+- **9-page UI** (`dokpilot-ui/`) — Open Design-generated multi-page operator surface. Pages: Overview, Projects, Deploy wizard, Logs, Domains, Databases, Servers, Claude console, Settings. Simple ⟷ Advanced mode toggle persisted to localStorage.
+- **Backend** (`mcp-server/ui-server/`, Node 20 stdlib, zero npm deps). 16 endpoints across read (servers, apps, app detail, app deploys, domains, databases, secrets/status, config, health), writes (domain create, app redeploy/restart/stop, database create) with CSRF gate, SSE (deploy log tail via SSH `tail -f`, events firehose, deploy job stream, Claude session stream), and `/api/assistant` (spawns the local `claude` CLI in stream-json mode, forwards tool calls + message deltas to the UI).
+- **Deploy wizard job-runner** — paste GitHub URL → POST `/api/jobs/deploy` → atomic job file at `~/.claude/skills/dokpilot/jobs/<id>.json` → mock worker advances the lifecycle (analyzing-stack → awaiting-answers → deploying → wait-dns → finalizing → done) while the UI tails via `fs.watch` + SSE. The mock will be replaced by a real `/dokpilot deploy --job <id>` Claude worker in a future minor release.
+
+### Added — Brand
+
+- **Pixel-art whale-pilot logo** (Higgsfield GPT Image 2) and full asset set: GitHub social card 1280×640, README banner 1200×300, landing hero 1920×1080 still + 5s Kling v3.0 loopable MP4. Files under `landing/public/brand/`.
+- **`design-systems/dokpilot/`** in Open Design — canonical DESIGN.md + tokens.css + components.html + manifest.json. Brand voice: dark base `#0a0b0c`, neon-green accent `#39ff14`, JetBrains Mono for technical strings, Inter for narrative. Sibling design system to keys-keeper.
 - `LICENSE` (MIT) at repo root.
+
+### Added — Dokploy currency
+
+- Documented baseline bumped to **Dokploy v0.29+** (released 2026-05-22). New eval case `dokploy-version-drift` calls `settings.version` and warns when the running instance is below baseline.
+- All references translated to English; Russian fragments removed.
 
 ### Not changed
 
