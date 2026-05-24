@@ -409,11 +409,32 @@ async function api(path, opts = {}) {
     const tok = window.__DOKPILOT_TOKEN__;
     if (tok && !headers["Authorization"]) headers["Authorization"] = "Bearer " + tok;
     const res = await fetch(path, { credentials: "include", ...opts, headers });
-    if (!res.ok) return { __error: true, status: res.status };
+    if (!res.ok) {
+      // Try to surface the server's JSON error body for diagnostics
+      try {
+        const body = await res.json();
+        return { __error: true, status: res.status, ...body };
+      } catch {
+        return { __error: true, status: res.status };
+      }
+    }
     return await res.json();
   } catch (e) {
     return { __error: true, message: String(e?.message || e) };
   }
+}
+
+/** POST helper that auto-includes X-CSRF header. Returns the API
+ *  response (or {__error:true, status} on failure). When the dashboard
+ *  is in MOCK mode (no token), returns {__error:true, mock:true} so
+ *  callers can fall back to MOCK behavior. */
+async function postAction(path, body, extraHeaders = {}) {
+  if (!window.__DOKPILOT_TOKEN__) return { __error: true, mock: true };
+  return api(path, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-CSRF": window.__DOKPILOT_TOKEN__, ...extraHeaders },
+    body: JSON.stringify(body || {}),
+  });
 }
 
 const niceTime = (iso) => {
@@ -641,7 +662,7 @@ async function startLogStream({ appId, server, deployId }, callbacks = {}) {
 }
 
 /* ─── expose for per-page scripts ───────────────────────────────────── */
-window.Dok = { $, $$, el, icon, badge, toast, DATA, askClaude, go, openPalette, api, startLogStream, live: false };
+window.Dok = { $, $$, el, icon, badge, toast, DATA, askClaude, go, openPalette, api, postAction, startLogStream, live: false };
 
 /* ─── boot: mount shell, fetch live data, then run page hook ────────── */
 document.addEventListener("DOMContentLoaded", async () => {

@@ -118,22 +118,47 @@ window.pageInit = ({ el, icon, badge, toast, DATA }) => {
 
   // add-domain modal
   document.getElementById("add-domain").addEventListener("click", () => {
+    // Build list of {label, app_id, kind, server} so we can pick the
+    // right Dokploy endpoint on submit. Each <option> stores the app
+    // id in its value attribute.
+    const apps = Object.values(DATA.apps).filter(a => a && a.id && !a.id.startsWith('_'));
+
+    const hostInput  = el("input", { class:"input mono", placeholder:"app.example.com", autofocus:"true" });
+    const appSelect  = el("select", { class:"select mono" },
+      ...apps.map(a => el("option", { value: a.id + "::" + a.kind + "::" + a.server }, a.name)));
+
     const overlay = el("div", { class:"overlay", onclick:(e)=>{ if(e.target===overlay) overlay.remove(); } },
       el("div", { class:"modal" },
         el("div", { class:"modal-head" }, icon("globe",17), el("h3", null, el("span",{ "data-adv":"" },"Add domain"), el("span",{ "data-simple":"" },"Add a web address")),
           el("button", { class:"icon-btn", style:{marginLeft:"auto"}, onclick:()=>overlay.remove() }, icon("x",16))),
         el("div", { class:"modal-body stack" },
-          el("div", { class:"field" }, el("label", null, "Domain"), el("input", { class:"input mono", placeholder:"app.example.com", autofocus:"true" })),
-          el("div", { class:"field" }, el("label", null, "Point to app"),
-            el("select", { class:"select mono" }, ...Object.values(DATA.apps).map(a=>el("option",null,a.name)))),
+          el("div", { class:"field" }, el("label", null, "Domain"), hostInput),
+          el("div", { class:"field" }, el("label", null, "Point to app"), appSelect),
           el("label", { class:"row", style:{gap:"10px",cursor:"pointer"}, "data-adv":"" }, el("span",{class:"switch"},el("input",{type:"checkbox",checked:"true"}),el("span",{class:"track"})), "Proxy through Cloudflare"),
           el("div", { class:"callout ai" }, icon("spark",15),
             el("div", null, "Claude will create the Cloudflare ", el("code",null,"A"), " record, wait for propagation, and request a Let's Encrypt certificate automatically."))),
         el("div", { class:"modal-foot" },
           el("button", { class:"btn btn-ghost", onclick:()=>overlay.remove() }, "Cancel"),
-          el("button", { class:"btn btn-primary", onclick:()=>{ overlay.remove(); toast("Adding domain — DNS + SSL in progress","globe"); } }, "Add & issue SSL"))));
+          el("button", { class:"btn btn-primary", onclick:async () => {
+            const host = (hostInput.value || "").trim();
+            if (!host) { toast("Enter a domain","warn",true); return; }
+            const [app_id, app_kind, server] = appSelect.value.split("::");
+            overlay.remove();
+            toast("Adding " + host + " — DNS + SSL in progress","globe");
+            const r = await window.Dok.postAction("/api/domains", { host, app_id, app_kind, server, port: 80, https: true });
+            if (r.__error && !r.mock) {
+              toast("Add failed: " + (r.message || ("HTTP "+r.status)), "warn", true);
+            } else if (!r.__error) {
+              toast(host + " added · A record → " + (r.dns_record?.content || "?"), "check");
+              // Trigger a re-fetch of domains in the next bootData (or refresh page)
+              document.dispatchEvent(new CustomEvent("dokpilot:reload-domains"));
+            }
+          } }, "Add & issue SSL"))));
     document.body.append(overlay);
   });
+
+  // Reload domains when an add succeeds (lazy: full page reload, simplest path)
+  document.addEventListener("dokpilot:reload-domains", () => setTimeout(() => location.reload(), 1200));
 };
 </script>
 </body>

@@ -88,20 +88,55 @@ window.pageInit = ({ el, icon, badge, toast, DATA }) => {
   });
 
   document.getElementById("add-db").addEventListener("click", () => {
+    // Engine choices map display label → (engine, dockerImage). The
+    // backend defaults dockerImage per engine if omitted; we still
+    // pass it explicitly so power users can pick alternative tags.
+    const ENGINES = [
+      { label: "PostgreSQL 16",  engine: "postgres", image: "postgres:16-alpine" },
+      { label: "PostgreSQL 15",  engine: "postgres", image: "postgres:15-alpine" },
+      { label: "MySQL 8",        engine: "mysql",    image: "mysql:8.0" },
+      { label: "Redis 7",        engine: "redis",    image: "redis:7-alpine" },
+      { label: "MongoDB 7",      engine: "mongo",    image: "mongo:7" },
+    ];
+
+    const nameInput   = el("input", { class:"input mono", placeholder:"my-app-pg", autofocus:"true" });
+    const engineSelect = el("select", { class:"select mono" }, ...ENGINES.map((e, i) => el("option", { value: String(i) }, e.label)));
+    const serverSelect = el("select", { class:"select mono" }, ...DATA.servers.map(s => el("option", { value: s.id }, s.name)));
+
     const overlay = el("div", { class:"overlay", onclick:(e)=>{ if(e.target===overlay) overlay.remove(); } },
       el("div", { class:"modal" },
         el("div", { class:"modal-head" }, icon("database",17), el("h3",null,"New database"),
           el("button", { class:"icon-btn", style:{marginLeft:"auto"}, onclick:()=>overlay.remove() }, icon("x",16))),
         el("div", { class:"modal-body stack" },
-          el("div", { class:"field" }, el("label",null,"Name"), el("input",{class:"input mono",placeholder:"my-app-pg",autofocus:"true"})),
+          el("div", { class:"field" }, el("label",null,"Name"), nameInput),
           el("div", { class:"grid grid-2" },
-            el("div", { class:"field" }, el("label",null,"Engine"), el("select",{class:"select mono"}, el("option",null,"PostgreSQL 16"), el("option",null,"PostgreSQL 15"), el("option",null,"MySQL 8"), el("option",null,"Redis 7"), el("option",null,"MongoDB 7"))),
-            el("div", { class:"field" }, el("label",null,"Server"), el("select",{class:"select mono"}, ...DATA.servers.map(s=>el("option",null,s.name))))),
+            el("div", { class:"field" }, el("label",null,"Engine"), engineSelect),
+            el("div", { class:"field" }, el("label",null,"Server"), serverSelect)),
           el("div", { class:"callout ai" }, icon("spark",15),
             el("div", null, "Claude provisions the container, generates a strong password into your Keychain, and exposes it to linked apps as ", el("code",null,"DATABASE_URL"), "."))),
         el("div", { class:"modal-foot" },
           el("button", { class:"btn btn-ghost", onclick:()=>overlay.remove() }, "Cancel"),
-          el("button", { class:"btn btn-primary", onclick:()=>{ overlay.remove(); toast("Provisioning database…","database"); } }, "Create database"))));
+          el("button", { class:"btn btn-primary", onclick:async () => {
+            const name = (nameInput.value || "").trim();
+            if (!name) { toast("Enter a name","warn",true); return; }
+            const eng = ENGINES[Number(engineSelect.value)];
+            const server = serverSelect.value;
+            overlay.remove();
+            toast("Provisioning " + name + " (" + eng.engine + ")…","database");
+            const r = await window.Dok.postAction("/api/databases", {
+              engine: eng.engine,
+              name,
+              server,
+              docker_image: eng.image,
+              deploy: true,
+            });
+            if (r.__error && !r.mock) {
+              toast("DB create failed: " + (r.message || ("HTTP "+r.status)), "warn", true);
+            } else if (!r.__error) {
+              toast(name + " created · deploying container", "check");
+              setTimeout(() => location.reload(), 1500);
+            }
+          }}, "Create database"))));
     document.body.append(overlay);
   });
 };

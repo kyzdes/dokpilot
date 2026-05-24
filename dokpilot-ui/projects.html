@@ -107,9 +107,24 @@ window.pageInit = ({ el, icon, badge, toast, DATA, askClaude }) => {
             el("span", { class:"dim-sep" }, "·"), "on " + a.server, el("span", { class:"dim-sep", "data-adv":"" }, "·"), el("span",{ "data-adv":"" }, a.stack))),
         el("div", { class:"row wrap", style:{gap:"8px"} },
           a.domain ? el("a", { class:"btn btn-sm", href:"https://"+a.domain, target:"_blank" }, "Open", icon("ext", 12)) : null,
-          el("button", { class:"btn btn-primary btn-sm", onclick:()=>toast("Redeploying " + a.name + "…", "deploy") }, icon("deploy", 13), "Redeploy"),
-          el("button", { class:"btn btn-sm", "data-adv":"", onclick:()=>toast(a.name + " restarted", "restart") }, icon("restart", 13), "Restart"),
-          el("button", { class:"btn btn-sm btn-danger", "data-adv":"", onclick:()=>toast(a.name + " stopped", "pause", true) }, icon("pause", 13), "Stop"))));
+          // Action buttons — when live, hit the real /api/apps/:id/<action> endpoint via Dok.postAction.
+          // Pass app `kind` (application | compose) so the backend picks the right Dokploy endpoint
+          // (application.redeploy vs compose.deploy). Toast feedback either way.
+          el("button", { class:"btn btn-primary btn-sm", onclick:async ()=>{
+            const r = await window.Dok.postAction(`/api/apps/${a.id}/redeploy`, { server:a.server, kind:a.kind });
+            if (r.__error && !r.mock) toast("Redeploy failed: " + (r.message || ("HTTP "+r.status)), "warn", true);
+            else toast("Redeploying " + a.name + "…", "deploy");
+          }}, icon("deploy", 13), "Redeploy"),
+          el("button", { class:"btn btn-sm", "data-adv":"", onclick:async ()=>{
+            const r = await window.Dok.postAction(`/api/apps/${a.id}/restart`, { server:a.server, kind:a.kind });
+            if (r.__error && !r.mock) toast("Restart failed: " + (r.message || ("HTTP "+r.status)), "warn", true);
+            else toast(a.name + " restarted", "restart");
+          }}, icon("restart", 13), "Restart"),
+          el("button", { class:"btn btn-sm btn-danger", "data-adv":"", onclick:async ()=>{
+            const r = await window.Dok.postAction(`/api/apps/${a.id}/stop`, { server:a.server, kind:a.kind });
+            if (r.__error && !r.mock) toast("Stop failed: " + (r.message || ("HTTP "+r.status)), "warn", true);
+            else toast(a.name + " stopped", "pause", true);
+          }}, icon("pause", 13), "Stop"))));
 
     // error callout if failed
     const errBlock = a.status === "error" ? el("section", { class:"card card-pad mb-4", style:{borderColor:"var(--danger-soft)"} },

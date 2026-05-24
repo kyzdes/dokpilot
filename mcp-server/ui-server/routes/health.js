@@ -9,8 +9,8 @@ module.exports = {
       port: ctx.port,
       pid: process.pid,
       uptime_s: Math.round(process.uptime()),
-      milestone: "M5 (Epic 3: job-runner)",
-      next: "M6 (write actions: domains create, redeploy, db create) + M7 Claude console",
+      milestone: "M6 (Epic 3.5: write actions)",
+      next: "M7 (Epic 4): Claude console + /api/assistant",
       ui_root: ctx.uiRoot,
     });
   },

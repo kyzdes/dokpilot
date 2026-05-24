@@ -120,6 +120,28 @@ async function cloudflareList(zone) {
   return { records };
 }
 
+/** Create a CF DNS A-record. Always --no-proxy (Let's Encrypt HTTP-01
+ *  challenge needs the record to point directly at the origin so
+ *  CertBot can verify; the user can flip to proxied later via the CF
+ *  dashboard or a follow-up call). */
+async function cloudflareCreate(host, ip) {
+  const r = await runScript("cloudflare-dns.sh", ["create", host, ip, "--no-proxy"]);
+  if (r.code !== 0) return { __error: true, code: r.code, stderr: r.stderr.slice(0, 800) };
+  // Script prints created record info as JSON on success
+  try {
+    const obj = JSON.parse(r.stdout.trim());
+    return { record: obj };
+  } catch {
+    return { record: { name: host, content: ip, proxied: false } };
+  }
+}
+
+async function cloudflareDelete(host) {
+  const r = await runScript("cloudflare-dns.sh", ["delete", host]);
+  if (r.code !== 0) return { __error: true, code: r.code, stderr: r.stderr.slice(0, 800) };
+  return { deleted: host };
+}
+
 /* ─── ssh-exec.sh ───────────────────────────────────────────────── */
 /** Runs an arbitrary command via SSH on a server, returns trimmed stdout. */
 async function sshExec(server, cmd) {
@@ -230,6 +252,8 @@ module.exports = {
   runScript,
   dokploy,
   cloudflareList,
+  cloudflareCreate,
+  cloudflareDelete,
   sshExec,
   keysList,
   readConfig,
