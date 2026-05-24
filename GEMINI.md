@@ -197,6 +197,7 @@ All scripts are in `<skill-dir>/scripts/`. Always use full paths when calling th
 - Before `destroy` **always** ask for confirmation
 - Before creating/changing DNS records, show what will change
 - Mask sensitive data in error logs
+- **On macOS, store tokens in Keychain by default** (Dokploy API key, CloudFlare API token). `servers.json` holds references, not values. See `references/secrets-management.md`.
 
 ### 4. Error handling
 
@@ -218,35 +219,87 @@ Or determine from the path to this SKILL.md file.
 
 ### `/vps config` — Configuration management
 
+Secrets (Dokploy API keys, CloudFlare token) are stored in the macOS Keychain when
+available. `servers.json` holds a reference of the form `{"_secret": "<account>"}`;
+the actual value is resolved via `scripts/secret-store.sh`. On non-macOS platforms,
+or when the user declines, secrets stay as plain strings in `servers.json` (fully
+backwards compatible).
+
 #### `config` (no args)
-Show current config (without secrets):
-```bash
-cat config/servers.json | jq 'del(.servers[].dokploy_api_key, .servers[].ssh_key, .cloudflare.api_token)'
+
+Print a source report — **values are never printed**. For each secret field, show
+whether it lives in the Keychain or as a plain value in the file:
+
 ```
+servers.main.dokploy_api_key  → keychain (vps-ninja / main:dokploy_api_key)
+servers.main.ssh_key          → file (path)
+cloudflare.api_token          → keychain (vps-ninja / cloudflare:api_token)
+defaults.server               → main
+```
+
+Non-secret fields (`host`, `ssh_user`, `dokploy_url`, `defaults`) may be shown as-is.
 
 #### `config server add <name> <ip> [--ssh-key <path>]`
+
 > Validate IP format before saving: `[[ "$IP" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]`
 
-Add server to config:
-```json
-{
-  "host": "<ip>",
-  "ssh_user": "root",
-  "ssh_key": "<path-or-empty>",
-  "dokploy_url": "http://<ip>:3000",
-  "dokploy_api_key": "",
-  "added_at": "<ISO-date>"
-}
-```
+1. Save public fields (`host`, `ssh_user`, `ssh_key`, `dokploy_url`, `added_at`) to `servers.json`:
+   ```json
+   {
+     "host": "<ip>",
+     "ssh_user": "root",
+     "ssh_key": "<path-or-empty>",
+     "dokploy_url": "http://<ip>:3000",
+     "added_at": "<ISO-date>"
+   }
+   ```
+2. Prompt for the Dokploy API key with hidden input:
+   ```bash
+   read -r -s -p "Dokploy API key for <name> (input hidden, empty to skip): " KEY
+   ```
+3. If the key is non-empty, ask **where to store** it:
+   - If `bash scripts/secret-store.sh available` returns 0 (macOS + `security`), the default is **Keychain** (press Enter), with `p` to fall back to plain file.
+   - On non-macOS, skip the question and save plain.
+4. On Keychain choice:
+   ```bash
+   bash scripts/secret-store.sh set "<name>:dokploy_api_key" "<token>"
+   ```
+   and write `"dokploy_api_key": {"_secret": "<name>:dokploy_api_key"}` into `servers.json`.
+5. On plain choice, write `"dokploy_api_key": "<token>"` directly.
+
+> Never pass the key as a command argument — it would leak to shell history.
 
 #### `config server remove <name>`
-Remove server from config.
 
-#### `config cloudflare <api-token>`
-Save CloudFlare API token.
+1. Ask for explicit `Y/n` confirmation.
+2. Remove the server block from `servers.json`.
+3. Delete related Keychain items: enumerate accounts `<name>:*` (from the references
+   inside the removed block) and call `secret-store.sh delete` for each.
+
+#### `config cloudflare [<api-token>]`
+
+- **No argument (preferred):** prompt via `read -s`, then ask where to store (same flow as above). Default: Keychain on macOS.
+- **Argument form:** save immediately — prefer Keychain on macOS — and print a warning: "token may have landed in shell history; consider rotating it or using the no-argument form next time."
+
+Stored account: `cloudflare:api_token`.
 
 #### `config default <server-name>`
+
 Set default server.
+
+#### `config migrate-to-keychain`
+
+Move all existing plain-string secrets from `servers.json` into the Keychain.
+
+1. Write a backup alongside: `config/servers.json.pre-keychain-<ISO-date>`.
+2. For each known secret field whose value is a plain string
+   (`servers.<name>.dokploy_api_key`, `cloudflare.api_token`):
+   - Call `secret-store.sh set <name>:<field> "<value>"` (or `cloudflare:<field>`).
+   - Replace the field in `servers.json` with `{"_secret": "<account>"}`.
+3. Skip fields that are already `{"_secret": ...}` references.
+4. Print a report: which fields were migrated, which were skipped, and where the
+   backup lives. Do not print the values themselves.
+5. On non-macOS, abort with a message pointing to `references/secrets-management.md`.
 
 ---
 

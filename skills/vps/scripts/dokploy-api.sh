@@ -44,8 +44,13 @@ if [ ! -f "$CONFIG" ]; then
   exit 1
 fi
 
+# shellcheck source=./_lib.sh
+source "$SCRIPT_DIR/_lib.sh"
+
 URL=$(jq -r ".servers.\"$SERVER\".dokploy_url // empty" "$CONFIG")
-KEY=$(jq -r ".servers.\"$SERVER\".dokploy_api_key // empty" "$CONFIG")
+if ! KEY=$(resolve_secret ".servers.\"$SERVER\".dokploy_api_key"); then
+  KEY=""
+fi
 
 if [ -z "$URL" ] || [ -z "$KEY" ]; then
   echo "{\"error\": \"Server '$SERVER' not found or missing API key\"}" >&2

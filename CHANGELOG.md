@@ -4,6 +4,37 @@ All notable changes to VPS Ninja are documented in this file.
 
 ---
 
+## v3.2.0 — 2026-04-19
+
+### Security
+
+- **Secrets moved to macOS Keychain by default** — Dokploy API keys and the CloudFlare API token now live under service `vps-ninja` in the system Keychain. `config/servers.json` holds references of the form `{"_secret": "<account>"}` instead of raw values. Plain-string storage remains fully supported for backwards compatibility and non-macOS platforms.
+- **First-access prompt via system dialog** — Keychain items are stored without `-T`, so macOS prompts for permission the first time each binary reads a secret; users click "Always Allow" to whitelist. This is stricter than pre-authorising arbitrary callers.
+- **Hidden input for token entry** — `config server add` and `config cloudflare` prompt via `read -s` when invoked without an argument, keeping tokens out of shell history.
+- **Warning when a token is passed as a CLI argument** — `config cloudflare <token>` still works but now prints a rotation hint.
+
+### Added
+
+- **`scripts/secret-store.sh`** — thin wrapper over the macOS `security` CLI with `get`/`set`/`delete`/`list`/`available` actions.
+- **`scripts/_lib.sh`** — shared `resolve_secret()` helper sourced by `cloudflare-dns.sh` and `dokploy-api.sh`; transparently handles both plain-string and `{"_secret": ...}` forms.
+- **`/vps config migrate-to-keychain`** — one-shot migration for existing installations: writes a `.pre-keychain-<date>` backup, moves every plain secret into the Keychain, and rewrites `servers.json` to use references.
+- **`/vps config` output rewrite** — now prints a source report (Keychain vs file) per secret field without ever printing values.
+- **`references/secrets-management.md`** — new guide covering storage formats, the first-access prompt, rotation, revocation, rollback to plain, and troubleshooting a locked Keychain.
+- **Two new eval scenarios** — `config migrate-to-keychain` and backwards compatibility of legacy plain-string configs.
+
+### Changed
+
+- **`/vps config server add` flow** — prompts for the API key with hidden input (no argument form), then asks where to store it. Keychain is the default on macOS.
+- **`/vps config server remove` flow** — now deletes related Keychain items after an explicit `Y/n` confirmation.
+- **Eval #3 (Setup VPS)** — extended with assertions that Keychain is offered as the default secret store on macOS and that the raw token never reaches stdout.
+
+### Not changed (by design)
+
+- **SSH private keys** — `servers.<name>.ssh_key` remains a path on disk. The recommendation for passphrase storage is `ssh-add --apple-use-keychain`, which is system-wide and outside this skill's scope.
+- **Non-macOS platforms** — Linux/Windows continue to use plain-string storage; no warnings, no forced migration.
+
+---
+
 ## v3.1.1 — 2026-03-18
 
 ### Security

@@ -34,8 +34,10 @@ if [ ! -f "$CONFIG" ]; then
   exit 1
 fi
 
-TOKEN=$(jq -r ".cloudflare.api_token // empty" "$CONFIG")
-if [ -z "$TOKEN" ]; then
+# shellcheck source=./_lib.sh
+source "$SCRIPT_DIR/_lib.sh"
+
+if ! TOKEN=$(resolve_secret '.cloudflare.api_token') || [ -z "$TOKEN" ]; then
   echo '{"error": "CloudFlare token not configured. Run: /vps config cloudflare <token>"}' >&2
   exit 1
 fi
@@ -62,12 +64,14 @@ _get_zone_id_raw() {
 get_zone_domain() {
   local domain="$1"
   # Try 2-part TLD first (most common: example.com, example.dev)
-  local zone2=$(echo "$domain" | awk -F. '{print $(NF-1)"."$NF}')
-  local id2=$(_get_zone_id_raw "$zone2")
+  local zone2 id2
+  zone2=$(echo "$domain" | awk -F. '{print $(NF-1)"."$NF}')
+  id2=$(_get_zone_id_raw "$zone2")
   if [ -n "$id2" ]; then echo "$zone2"; return; fi
   # Try 3-part TLD (example.co.uk, example.com.br)
-  local zone3=$(echo "$domain" | awk -F. '{print $(NF-2)"."$(NF-1)"."$NF}')
-  local id3=$(_get_zone_id_raw "$zone3")
+  local zone3 id3
+  zone3=$(echo "$domain" | awk -F. '{print $(NF-2)"."$(NF-1)"."$NF}')
+  id3=$(_get_zone_id_raw "$zone3")
   if [ -n "$id3" ]; then echo "$zone3"; return; fi
   # Fallback to 2-part (will fail later with "Zone not found" if wrong)
   echo "$zone2"

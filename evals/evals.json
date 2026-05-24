@@ -70,7 +70,7 @@
     {
       "id": 3,
       "prompt": "/vps setup 185.22.64.10 MyR00tPass456",
-      "expected_output": "The skill should: 1) Read setup-guide.md (not search web), 2) SSH to server, check resources, 3) Install Dokploy, 4) Wait for Dokploy to become available, 5) Ask user to create admin account in UI and provide API key, 6) Save config to servers.json, 7) Report completion with next steps",
+      "expected_output": "The skill should: 1) Read setup-guide.md (not search web), 2) SSH to server, check resources, 3) Install Dokploy, 4) Wait for Dokploy to become available, 5) Ask user to create admin account in UI and provide API key, 6) On macOS, offer Keychain as the default storage for the API key (user can opt for plain file), 7) Save server config to servers.json with {\"_secret\": ...} reference when Keychain is chosen, 8) Report completion with next steps",
       "files": [],
       "assertions": [
         {
@@ -92,6 +92,82 @@
           "name": "asks_for_api_key",
           "type": "positive",
           "description": "Must ask user to create admin account in UI and provide API key (not try to create via API)"
+        },
+        {
+          "name": "offers_keychain_default",
+          "type": "positive",
+          "description": "On macOS, must offer Keychain as the default secret store for the Dokploy API key and only fall back to plain file when the user explicitly declines"
+        },
+        {
+          "name": "stores_secret_reference",
+          "type": "positive",
+          "description": "When Keychain is used, servers.json must contain {\"_secret\": \"<account>\"} instead of the raw token"
+        },
+        {
+          "name": "no_token_in_stdout",
+          "type": "negative",
+          "description": "Must NOT print the API key value back to the user at any point"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "/vps config migrate-to-keychain",
+      "expected_output": "The skill should: 1) Read references/secrets-management.md, 2) Detect which secret fields in servers.json are plain strings, 3) Write a backup file config/servers.json.pre-keychain-<date>, 4) For each plain secret, call scripts/secret-store.sh set with the correct account naming convention (<server>:<field> or cloudflare:<field>), 5) Rewrite servers.json so every migrated field becomes {\"_secret\": \"<account>\"}, 6) Leave already-referenced fields untouched, 7) Print a summary report without printing any secret values",
+      "files": [],
+      "assertions": [
+        {
+          "name": "reads_secrets_management_guide",
+          "type": "positive",
+          "description": "Must read references/secrets-management.md or the migration section of SKILL.md"
+        },
+        {
+          "name": "creates_backup_file",
+          "type": "positive",
+          "description": "Must create config/servers.json.pre-keychain-<timestamp> before rewriting"
+        },
+        {
+          "name": "uses_secret_store_script",
+          "type": "positive",
+          "description": "Must call scripts/secret-store.sh set for each plain secret (not raw `security` commands)"
+        },
+        {
+          "name": "rewrites_to_reference_form",
+          "type": "positive",
+          "description": "After migration, secret fields in servers.json must be objects of the form {\"_secret\": \"<account>\"}"
+        },
+        {
+          "name": "no_secret_values_in_output",
+          "type": "negative",
+          "description": "Must NOT print raw token values in the summary or anywhere else"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "prompt": "/vps status",
+      "expected_output": "On an installation whose servers.json still has plain-string tokens (legacy format), the skill should: 1) Treat the config as valid and proceed, 2) Call dokploy-api.sh — which uses resolve_secret() — and succeed against the string value, 3) NOT print a deprecation warning for the plain-string form, 4) NOT refuse to run or demand migration",
+      "files": [
+        {
+          "path": "config/servers.json",
+          "content_hint": "servers.main.dokploy_api_key is a plain string, cloudflare.api_token is a plain string"
+        }
+      ],
+      "assertions": [
+        {
+          "name": "accepts_legacy_config",
+          "type": "positive",
+          "description": "Must run /vps status successfully against a config with plain-string tokens"
+        },
+        {
+          "name": "no_deprecation_warning",
+          "type": "negative",
+          "description": "Must NOT print a warning or error about plain-string storage being deprecated"
+        },
+        {
+          "name": "no_forced_migration",
+          "type": "negative",
+          "description": "Must NOT block the command or require the user to migrate before status can run"
         }
       ]
     }
