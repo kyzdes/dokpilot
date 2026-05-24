@@ -490,6 +490,26 @@ function adaptApps(apiApps) {
   return map;
 }
 
+function adaptJob(apiJob) {
+  // Match the OD page's expected shape: repo, branch, server, domain, stack,
+  // log[], questions[], id. Real /api/jobs/:id returns most of this already.
+  return {
+    id: apiJob.id,
+    repo: apiJob.repo || "",
+    branch: apiJob.branch || "main",
+    server: apiJob.server || "",
+    domain: apiJob.domain || "",
+    stack: apiJob.detected_stack || apiJob.stack || "auto-detect",
+    log: apiJob.log || [],
+    questions: (apiJob.questions || []).map(q => ({
+      id: q.id, label: q.label, type: q.type,
+      ph: q.placeholder, opts: q.options, hint: q.hint,
+      answer: q.answer,
+    })),
+    status: apiJob.status,
+  };
+}
+
 function synthActivity(apiApps) {
   return apiApps
     .filter((a) => a.last_deploy)
@@ -593,10 +613,35 @@ async function bootData() {
   Object.assign(window.Dok || (window.Dok = {}), { api, live: true });
   document.documentElement.dataset.dataSource = "live";
 
+  // Live in-flight job — replace MOCK DATA.job with the latest real
+  // non-terminal job, or clear it if none. The OD pageInit on index.html
+  // / overview reads DATA.job to render the "Deploy in flight" card;
+  // when we're live we don't want a stale MOCK seed flashing in there.
+  const jobsP = api("/api/jobs").then((r) => {
+    if (r.__error || !Array.isArray(r.jobs)) return;
+    const active = r.jobs.find(j => j.status && j.status !== "done" && j.status !== "error");
+    if (active) {
+      // Hydrate the full job state so the card has questions/log too
+      api(`/api/jobs/${active.id}`).then((full) => {
+        if (!full.__error && full.job) {
+          DATA.job = adaptJob(full.job);
+          document.dispatchEvent(new CustomEvent("dokpilot:data-updated", { detail: { kind: "job" } }));
+        }
+      });
+    } else {
+      // No in-flight job → blank out the MOCK seed so the index "in-flight" card
+      // renders empty (pageInit guards against undefined fields).
+      DATA.job = { id: null, repo: "", branch: "", server: "", domain: "", stack: "", log: [], questions: [] };
+      DATA.__no_inflight = true;
+    }
+  });
+
   // Page-aware blocking: if the user is on a page whose primary content
   // is the slow data, await it so pageInit renders with real values
   // first-paint. Otherwise fire-and-forget and emit data-updated event.
   const page = document.querySelector(".layout")?.dataset?.page;
+  // For overview/index page, await jobsP so the in-flight card renders right
+  if (page === "overview") await jobsP;
   const domainsP = api("/api/domains").then((r) => {
     if (!r.__error && Array.isArray(r.domains)) {
       DATA.domains = r.domains;

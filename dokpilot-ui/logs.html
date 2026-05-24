@@ -85,7 +85,12 @@ window.pageInit = ({ el, icon, badge, toast, DATA }) => {
   document.querySelector('[data-ic="pause"]')?.replaceWith(icon("pause",13));
   document.querySelector('[data-ic="trash"]')?.replaceWith(icon("trash",13));
 
-  const STREAMS = {
+  // STREAMS map: when running live behind /dokpilot ui we replace this
+  // with entries derived from real DATA.apps below — the seed/live
+  // arrays stay empty (the real log lines arrive via SSE in select()).
+  // When in MOCK mode (file:// / no token), the hardcoded mock streams
+  // below remain and the setInterval simulation kicks in instead.
+  const STREAMS_MOCK = {
     app_003: { name:"dokpilot-landing", status:"building", server:"main",
       seed:[
         {t:"11:30:02",kind:"cmd",text:"$ pnpm install --frozen-lockfile"},
@@ -121,7 +126,31 @@ window.pageInit = ({ el, icon, badge, toast, DATA }) => {
       ], live:[] },
   };
 
-  let current = "app_003", paused = false, timer = null;
+  // Build the real STREAMS map from DATA.apps when live, else use MOCK.
+  // We prefer "building" or "error" apps at the top, then "running".
+  let STREAMS;
+  let initialCurrent;
+  if (window.Dok?.live) {
+    STREAMS = {};
+    const apps = Object.values(DATA.apps || {})
+      .filter(a => a && a.id && !a.id.startsWith("_"))
+      // Stable de-dupe (the back-compat aliases point at real apps too)
+      .filter((a, i, all) => all.findIndex(x => x.id === a.id) === i)
+      // Prioritize building, then error, then running
+      .sort((a, b) => {
+        const order = { building: 0, error: 1, running: 2, stopped: 3 };
+        return (order[a.status] ?? 9) - (order[b.status] ?? 9);
+      });
+    apps.forEach(a => {
+      STREAMS[a.id] = { name: a.name, status: a.status, server: a.server, seed: [], live: [] };
+    });
+    initialCurrent = apps[0]?.id || null;
+  } else {
+    STREAMS = STREAMS_MOCK;
+    initialCurrent = "app_003";
+  }
+
+  let current = initialCurrent, paused = false, timer = null;
   const viewer = document.getElementById("viewer");
   const nameEl = document.getElementById("stream-name");
   const dotEl = document.getElementById("stream-dot");
@@ -219,7 +248,13 @@ window.pageInit = ({ el, icon, badge, toast, DATA }) => {
   document.getElementById("clear-btn").addEventListener("click", () => { viewer.innerHTML = ""; toast("Cleared view","trash"); });
 
   streamList();
-  select("app_003");
+  if (current) {
+    select(current);
+  } else {
+    nameEl.textContent = "No deployments yet";
+    viewer.innerHTML = "";
+    viewer.append(line({ t: "—", kind: "info", text: "No apps yet. Open the Deploy screen to ship your first one." }));
+  }
 };
 </script>
 </body>

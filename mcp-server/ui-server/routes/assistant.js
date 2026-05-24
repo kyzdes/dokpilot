@@ -132,13 +132,18 @@ function transformEvent(obj) {
     return { event: "partial", payload: { delta: obj.delta || obj.text || "" } };
   }
 
-  // Tool results
+  // Tool results — `r.content` can be a string OR an array of {type,text}.
+  // Both shapes appear in the wild depending on which tool ran; normalize.
   if (t === "user" && Array.isArray(obj.message?.content)) {
     const toolResults = obj.message.content.filter(c => c.type === "tool_result");
     if (toolResults.length > 0) {
-      return { event: "tool_result", payload: { results: toolResults.map(r => ({
-        id: r.tool_use_id, error: !!r.is_error, content: (r.content || []).map(c => c.text).filter(Boolean).join("\n").slice(0, 600),
-      })) } };
+      return { event: "tool_result", payload: { results: toolResults.map(r => {
+        let content = "";
+        if (typeof r.content === "string") content = r.content;
+        else if (Array.isArray(r.content)) content = r.content.map(c => c?.text).filter(Boolean).join("\n");
+        else if (r.content && typeof r.content === "object") content = JSON.stringify(r.content);
+        return { id: r.tool_use_id, error: !!r.is_error, content: content.slice(0, 600) };
+      }) } };
     }
     return null;
   }
@@ -184,7 +189,10 @@ async function startSession(req, res, ctx) {
   };
   sessions.set(id, sess);
 
-  // Wire line buffering on stdout
+  // Wire line buffering on stdout.
+  // Wrap each line's transform in try/catch — never let a schema surprise
+  // from the claude CLI crash the whole ui-server (was line 139 BUG that
+  // killed the process in production).
   child.stdout.on("data", (chunk) => {
     sess.buffer += chunk.toString("utf8");
     let nl;
@@ -194,10 +202,15 @@ async function startSession(req, res, ctx) {
       if (!line) continue;
       let obj;
       try { obj = JSON.parse(line); } catch { continue; }
-      const ev = transformEvent(obj);
+      let ev = null;
+      try { ev = transformEvent(obj); }
+      catch (err) {
+        console.error("[ui] transformEvent threw on line:", err.message);
+        continue;
+      }
       if (!ev) continue;
       if (sess.stream && !sess.stream.closed) {
-        sess.stream.send(ev.event, ev.payload);
+        try { sess.stream.send(ev.event, ev.payload); } catch {}
       } else {
         sess.events.push(ev);   // buffer until SSE connects
         if (sess.events.length > 200) sess.events.shift();

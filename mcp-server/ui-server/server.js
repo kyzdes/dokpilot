@@ -306,3 +306,10 @@ server.listen(PORT, "127.0.0.1", () => {
 
 process.on("SIGINT",  () => server.close(() => process.exit(0)));
 process.on("SIGTERM", () => server.close(() => process.exit(0)));
+
+// Last-resort error swallowers — the ui-server should NEVER crash in
+// front of the user. Route handlers already have their own try/catch;
+// these catch async stragglers (e.g. an SSE handler that throws on a
+// pipe that closed during a write). Log + continue.
+process.on("uncaughtException",  (err) => console.error("[ui] uncaught:", err));
+process.on("unhandledRejection", (err) => console.error("[ui] unhandled:", err));

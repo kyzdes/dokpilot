@@ -127,27 +127,47 @@ window.pageInit = ({ el, icon, badge, DATA, go }) => {
   tiles.append(
     tile("apps", el("span", null, el("span",{ "data-adv":"" },"Apps running"), el("span",{ "data-simple":"" },"Live now")), live, "across " + DATA.servers.length + " servers", "accent"),
     tile("deploy", "Building", building, building ? "1 deploy in progress" : "nothing building"),
-    tile("warn", el("span", null, el("span",{ "data-adv":"" },"Needs attention"), el("span",{ "data-simple":"" },"Needs you")), attention, attention ? "metrics-collector failed" : "all healthy"),
+    // "Needs attention" subtitle: name the first failing app, fall back to count when ≥2
+    tile("warn", el("span", null, el("span",{ "data-adv":"" },"Needs attention"), el("span",{ "data-simple":"" },"Needs you")), attention,
+      (() => {
+        if (attention === 0) return "all healthy";
+        const broken = apps.filter(a => a.status === "error");
+        if (broken.length === 1) return broken[0].name + " failed";
+        return broken.length + " apps in error";
+      })()),
   );
   const srvTile = tile("server", "Servers", DATA.servers.length, "all healthy");
   srvTile.setAttribute("data-adv", ""); tiles.append(srvTile);
 
-  // in-flight deploy
+  // in-flight deploy — only render the card if there's actually a real
+  // in-flight job. bootData() sets DATA.__no_inflight when /api/jobs
+  // returned zero non-terminal jobs (live mode), so we can short-circuit
+  // here. In MOCK mode DATA.job is the seed object → card renders as before.
   const job = DATA.job;
-  document.getElementById("inflight").append(
+  const inflightEl = document.getElementById("inflight");
+  if (DATA.__no_inflight) {
+    // Hide the card section entirely — its parent .stack still keeps spacing tidy
+    inflightEl.style.display = "none";
+  } else {
+  inflightEl.append(
     el("div", { class:"card-head" },
       el("h3", null, el("span",{ "data-adv":"" },"Deploy in flight"), el("span",{ "data-simple":"" },"Setting up a new app")),
-      badge("awaiting-answers")),
+      badge(job.status || "awaiting-answers")),
     el("div", { class:"card-pad", style:{paddingTop:"16px"} },
       el("div", { class:"row-between wrap", style:{gap:"12px"} },
         el("div", null,
-          el("div", { class:"app-name" }, job.repo.replace("github.com/","")),
-          el("div", { class:"dim-mono mt-2" }, "→ " + job.server, el("span",{class:"dim-sep"},"·"), job.stack)),
+          el("div", { class:"app-name" }, (job.repo||"").replace("github.com/","")),
+          el("div", { class:"dim-mono mt-2" }, "→ " + (job.server||"?"), el("span",{class:"dim-sep"},"·"), job.stack||"detecting…")),
         el("a", { class:"btn btn-primary", href:"deploy.html" }, "Resume", icon("chevron", 14))),
       el("div", { class:"callout ai mt-4" }, icon("spark", 16),
-        el("div", null, el("span",{ "data-adv":"" },"Claude paused for "), el("span",{ "data-simple":"" },"Claude needs "),
-          el("strong", null, "3 answers"), " before it can finish (database, public API URL, auto-deploy).")),
+        el("div", null,
+          el("span",{ "data-adv":"" }, "Claude is working on it. "),
+          el("span",{ "data-simple":"" }, "Claude is setting this up. "),
+          job.questions && job.questions.filter(q => q.required && (q.answer == null || q.answer === "")).length > 0
+            ? el("strong", null, "Needs " + job.questions.filter(q => q.required && (q.answer == null || q.answer === "")).length + " answers")
+            : el("span", null, "open the deploy screen for live progress."))),
     ));
+  }
 
   // needs attention
   const broken = DATA.apps.app_005;
@@ -190,7 +210,8 @@ window.pageInit = ({ el, icon, badge, DATA, go }) => {
   const sm = document.getElementById("servers-mini");
   DATA.servers.forEach(s => sm.append(el("a", { class:"lrow clickable", href:"servers.html?s=" + s.id, style:{gridTemplateColumns:"1fr auto"} },
     el("div", null, el("div", { class:"app-name" }, s.name, s.is_default ? el("span",{class:"tag-mini",style:{marginLeft:"8px"}},"default") : null),
-      el("div", { class:"dim-mono", style:{marginTop:"3px"} }, s.ip + " · " + s.cpu + "% cpu")),
+      el("div", { class:"dim-mono", style:{marginTop:"3px"} },
+        s.ip + " · " + (s.cpu != null ? s.cpu + "% cpu" : (s.app_count != null ? s.app_count + " apps" : "—")))),
     badge(s.status))));
 };
 </script>

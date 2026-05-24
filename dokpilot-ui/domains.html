@@ -110,7 +110,7 @@ window.pageInit = ({ el, icon, badge, toast, DATA }) => {
         el("div", { class:"dim-mono", style:{marginTop:"3px",fontSize:"var(--text-sm)"} }, d.proxied ? "proxied · "+d.zone : "DNS only · "+d.zone)),
       el("span", { class:"dim-mono", "data-adv":"" }, d.app),
       el("span", { class:"dim-mono", "data-adv":"" }, d.record),
-      el("span", { class:"badge badge-"+k }, el("span",{class:"dot dot-"+k+(d.ssl==="issuing"?" dot-pulse":"")}), sslLabel[d.ssl] + (d.ssl==="active"?" · "+d.ssl_exp:"")),
+      el("span", { class:"badge badge-"+k }, el("span",{class:"dot dot-"+k+(d.ssl==="issuing"?" dot-pulse":"")}), sslLabel[d.ssl] + (d.ssl==="active" && d.ssl_exp ? " · "+d.ssl_exp : "")),
       d.ssl === "issuing"
         ? el("button", { class:"ask-claude sm", "data-claude":"dns-help" }, icon("spark",11), el("span",{ "data-adv":"" },"Why?"), el("span",{ "data-simple":"" },"Ask"))
         : el("button", { class:"icon-btn", "data-copy":d.host, title:"Copy domain" }, icon("copy",13))));

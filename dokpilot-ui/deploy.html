@@ -114,7 +114,7 @@ window.pageInit = ({ el, icon, badge, toast, DATA, askClaude }) => {
       el("div", { class:"field" },
         el("label", null, el("span",{ "data-adv":"" },"Repository"), el("span",{ "data-simple":"" },"Your GitHub link")),
         el("div", { class:"input-group" },
-          el("input", { class:"input mono", id:"repo", placeholder:"github.com/your-name/your-app", value:"github.com/kyzdes/notes-app" }),
+          el("input", { class:"input mono", id:"repo", placeholder:"github.com/your-name/your-app" }),
           el("button", { class:"ask-claude", "data-claude":"default", type:"button", style:{height:"40px"} }, icon("spark", 13), "Pick for me")),
         el("div", { class:"hint", "data-simple":"" }, "Public or private — Dokpilot connects with your saved GitHub access.")),
 

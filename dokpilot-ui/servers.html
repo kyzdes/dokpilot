@@ -73,21 +73,44 @@ window.pageInit = ({ el, icon, badge, toast, DATA }) => {
   const detailEl = document.getElementById("srv-detail");
 
   const meter = (label, ic, val) => {
-    const cls = val >= 80 ? "danger" : val >= 65 ? "warn" : "";
+    const known = val != null && Number.isFinite(val);
+    const cls = !known ? "" : (val >= 80 ? "danger" : val >= 65 ? "warn" : "");
     return el("div", { class:"meter" },
-      el("div", { class:"meter-top" }, el("span",{class:"row",style:{gap:"7px"}}, icon(ic,14), label), el("span",{class:"meter-val"}, val + "%")),
-      el("div", { class:"meter-track" }, el("div", { class:"meter-fill " + cls, style:{width:val+"%"} })));
+      el("div", { class:"meter-top" }, el("span",{class:"row",style:{gap:"7px"}}, icon(ic,14), label), el("span",{class:"meter-val"}, known ? val + "%" : "—")),
+      el("div", { class:"meter-track" }, el("div", { class:"meter-fill " + cls, style:{width: (known ? val : 0) + "%"} })));
   };
 
   function renderList() {
     listEl.innerHTML = "";
     DATA.servers.forEach(s => listEl.append(el("button", { class:"md-item" + (s.id===current?" active":""), type:"button", onclick:()=>{ current=s.id; renderList(); renderDetail(); } },
       el("div", { class:"md-name" }, icon("server", 15), s.name, s.is_default ? el("span",{class:"tag-mini"},"default") : null, badge(s.status)),
-      el("div", { class:"md-sub" }, s.ip, el("span",{class:"dim-sep"},"·"), s.cpu + "% cpu · " + s.apps.length + " apps"))));
+      el("div", { class:"md-sub" }, s.ip, el("span",{class:"dim-sep"},"·"),
+        (s.cpu != null ? s.cpu + "% cpu" : (s.app_count != null ? s.app_count + " apps" : (s.apps?.length || 0) + " apps"))))));
+  }
+
+  // Live mode: lazy-fetch /api/servers/:name/stats for the active server
+  // and patch DATA.servers[i] in place, then re-render. This is M2 wiring
+  // in service of M9 UX — meters stop showing "—" once the SSH probe
+  // returns.
+  async function fetchStatsFor(id) {
+    if (!window.Dok?.live || !window.Dok?.api) return;
+    const r = await window.Dok.api(`/api/servers/${encodeURIComponent(id)}/stats`);
+    if (r.__error) return;
+    const s = DATA.servers.find(x => x.id === id);
+    if (!s) return;
+    s.cpu = r.cpu_percent;
+    s.ram = r.ram_percent;
+    s.disk = r.disk_percent;
+    s.ram_gb = (r.ram_used_mb != null && r.ram_total_mb != null) ? (Math.round(r.ram_used_mb/1024*10)/10 + " / " + Math.round(r.ram_total_mb/1024) + " GB") : "—";
+    s.disk_gb = r.disk_percent != null ? "~" + r.disk_percent + "% used" : "—";
+    s.uptime = r.uptime || s.uptime;
+    if (current === id) renderDetail();
+    renderList();
   }
 
   function renderDetail() {
-    const s = DATA.servers[current] || DATA.servers.find(x=>x.id===current);
+    const s = DATA.servers.find(x=>x.id===current) || DATA.servers[0];
+    if (!s) { detailEl.innerHTML = '<p class="muted-dash">No servers configured. Run /dokpilot config server add &lt;name&gt; &lt;ip&gt;.</p>'; return; }
     detailEl.innerHTML = "";
 
     detailEl.append(el("section", { class:"card card-pad mb-4" },
@@ -95,7 +118,8 @@ window.pageInit = ({ el, icon, badge, toast, DATA }) => {
         el("div", null,
           el("div", { class:"row", style:{gap:"10px"} }, el("h2",{class:"mono",style:{fontSize:"var(--text-2xl)"}}, s.name), badge(s.status),
             el("span", { class:"pill pill-key", title:"API key location" }, icon("lock",10), s.secret)),
-          el("div", { class:"dim-mono mt-2" }, s.ip, el("span",{class:"dim-sep"},"·"), s.region, el("span",{class:"dim-sep"},"·"), "dokploy " + s.dokploy, el("span",{class:"dim-sep"},"·"), "up " + s.uptime)),
+          // uptime may already start with "up …" (from `uptime -p`) — don't double-prefix
+          el("div", { class:"dim-mono mt-2" }, s.ip, el("span",{class:"dim-sep"},"·"), s.region, el("span",{class:"dim-sep"},"·"), "dokploy " + (s.dokploy || "?"), el("span",{class:"dim-sep"},"·"), /^up\s/.test(s.uptime || "") ? s.uptime : "up " + (s.uptime || "—"))),
         el("div", { class:"row wrap", style:{gap:"8px"} },
           el("a", { class:"btn btn-sm", href:"http://"+s.ip+":3000", target:"_blank" }, "Dokploy admin", icon("ext",12)),
           el("button", { class:"ask-claude", "data-claude":"default" }, icon("spark",13), "Run health check")))));
@@ -125,6 +149,8 @@ window.pageInit = ({ el, icon, badge, toast, DATA }) => {
 
   renderList();
   renderDetail();
+  // Kick the SSH stats probe in the background — meters will update when it returns.
+  fetchStatsFor(current);
 };
 </script>
 </body>
