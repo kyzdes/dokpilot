@@ -71,6 +71,7 @@ const router = buildRouter([
   require("./routes/domains"),
   require("./routes/databases"),
   require("./routes/secrets"),
+  require("./routes/streams"),
 ]);
 
 /* ─── helpers ───────────────────────────────────────────────────── */

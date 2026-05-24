@@ -148,7 +148,8 @@ window.pageInit = ({ el, icon, badge, toast, DATA }) => {
     return row;
   }
 
-  function select(id) {
+  let liveStream = null;
+  async function select(id) {
     current = id; streamList();
     const s = STREAMS[id];
     nameEl.textContent = s.name;
@@ -157,6 +158,46 @@ window.pageInit = ({ el, icon, badge, toast, DATA }) => {
     s.seed.forEach(l => viewer.append(line(l)));
     applyFilter();
     if (timer) clearInterval(timer);
+    if (liveStream) { liveStream.close(); liveStream = null; }
+
+    // LIVE PATH: when the dashboard is served by /dokpilot ui, swap the
+    // MOCK setInterval simulation for a real EventSource against the
+    // backend SSE log endpoint (KI-005-aware SSH tail).
+    if (window.Dok?.live && window.Dok?.startLogStream && DATA.apps[id]?.server) {
+      // Replace the seed lines with an initial "connecting…" hint
+      viewer.append(line({ t: "", kind: "info", text: "Connecting live log stream…" }));
+      // STREAMS keys (app_001..) are legacy aliases mapped onto real
+      // Dokploy app ids in the adapter. Use the *real* id for the API.
+      const realId = DATA.apps[id].id;
+      try {
+        liveStream = await window.Dok.startLogStream(
+          { appId: realId, server: DATA.apps[id].server },
+          {
+            onMeta: (m) => {
+              viewer.append(line({ t: "", kind: "info", text: "Tailing " + (m.log_path || "(log)") }));
+            },
+            onLine: (l) => {
+              if (paused) return;
+              viewer.append(line(l));
+              applyFilter();
+              viewer.scrollTop = viewer.scrollHeight;
+            },
+            onDone: ({ code }) => {
+              viewer.append(line({ t: "", kind: code ? "warn" : "info", text: "Stream closed (exit " + code + ")" }));
+            },
+            onError: (e) => {
+              if (e.reason === "no-deploys") {
+                viewer.append(line({ t: "", kind: "warn", text: "No deployments yet — run /dokpilot deploy to start one." }));
+              }
+            },
+          });
+      } catch (e) {
+        viewer.append(line({ t: "", kind: "error", text: "Could not start live stream: " + e.message }));
+      }
+      return;
+    }
+
+    // MOCK PATH: fake live stream via setInterval (when no backend)
     let i = 0;
     if (s.status === "building") {
       timer = setInterval(() => {

@@ -594,8 +594,54 @@ async function bootData() {
   return true;
 }
 
+/* ─── live log streaming (Epic 2) ────────────────────────────────────
+   Opens an EventSource against /api/deploys/:id/log/stream and invokes
+   onLine(lineObj) for each `log` event. Returns { close() } so the
+   caller can tear down on selection change. If we don't yet know the
+   deployId, the helper queries /api/apps/:id/deploys to find the most
+   recent one with a logPath, then connects.
+
+   Robustness:
+     - Auto-reconnect handled natively by EventSource for transient
+       network blips (within the same server process).
+     - If the response status was 404 (no deploys yet), the SSE
+       reports `error` once and stops — caller may show empty state.
+*/
+async function startLogStream({ appId, server, deployId }, callbacks = {}) {
+  if (!window.__DOKPILOT_TOKEN__) return { close(){} };          // mock mode
+  const cb = { onMeta: () => {}, onLine: () => {}, onDone: () => {}, onError: () => {}, ...callbacks };
+
+  // If we have no deployId, fetch the latest deploy id for this app
+  if (!deployId) {
+    const dl = await api(`/api/apps/${encodeURIComponent(appId)}/deploys?server=${encodeURIComponent(server)}`);
+    if (dl.__error || !Array.isArray(dl.deploys) || dl.deploys.length === 0) {
+      cb.onError({ reason: "no-deploys" });
+      return { close(){} };
+    }
+    const recent = dl.deploys.find((d) => d.log_path) || dl.deploys[0];
+    deployId = recent.id;
+  }
+
+  // EventSource doesn't support custom headers — we have to pass the
+  // bearer token via query string. The server already accepts ?t=… as
+  // a valid token source.
+  const url = `/api/deploys/${encodeURIComponent(deployId)}/log/stream`
+    + `?server=${encodeURIComponent(server)}`
+    + `&appId=${encodeURIComponent(appId)}`
+    + `&t=${encodeURIComponent(window.__DOKPILOT_TOKEN__)}`;
+
+  const es = new EventSource(url, { withCredentials: true });
+  es.addEventListener("meta",  (e) => { try { cb.onMeta(JSON.parse(e.data)); } catch {} });
+  es.addEventListener("log",   (e) => { try { cb.onLine(JSON.parse(e.data)); } catch {} });
+  es.addEventListener("done",  (e) => { try { cb.onDone(JSON.parse(e.data)); } catch {} es.close(); });
+  es.addEventListener("error", (e) => { cb.onError({ readyState: es.readyState }); });
+  es.addEventListener("close", () => { es.close(); });
+
+  return { close() { try { es.close(); } catch {} } };
+}
+
 /* ─── expose for per-page scripts ───────────────────────────────────── */
-window.Dok = { $, $$, el, icon, badge, toast, DATA, askClaude, go, openPalette, api, live: false };
+window.Dok = { $, $$, el, icon, badge, toast, DATA, askClaude, go, openPalette, api, startLogStream, live: false };
 
 /* ─── boot: mount shell, fetch live data, then run page hook ────────── */
 document.addEventListener("DOMContentLoaded", async () => {
