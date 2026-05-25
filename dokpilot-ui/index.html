@@ -190,9 +190,16 @@ window.pageInit = ({ el, icon, badge, DATA, go }) => {
     ));
   }
 
-  // needs attention
-  const broken = DATA.apps.app_005;
+  // needs attention — only when an app is genuinely in error/stopped state.
+  // (Previously always rendered DATA.apps.app_005, which in live mode is an
+  // alias to a healthy app → a false "needs attention" card. Hide it when
+  // nothing is actually broken so the card matches the overview rollup.)
+  const brokenApps = apps.filter(a => a.status === "error" || a.status === "stopped");
   const att = document.getElementById("attention");
+  if (!brokenApps.length) {
+    att.style.display = "none";
+  } else {
+  const broken = brokenApps[0];
   att.append(
     el("div", { class:"card-head" }, el("h3", null, "Needs attention"), badge("error")),
     el("div", { class:"card-pad", style:{paddingTop:"16px"} },
@@ -203,10 +210,11 @@ window.pageInit = ({ el, icon, badge, DATA, go }) => {
         el("button", { class:"ask-claude", "data-claude":"fix-deploy" }, icon("spark", 13),
           el("span", null, el("span",{ "data-adv":"" },"Diagnose & fix"), el("span",{ "data-simple":"" },"Fix it for me")))),
       el("div", { class:"callout warn mt-4", "data-adv":"" }, icon("warn", 15),
-        el("code", null, broken.error)),
+        el("code", null, broken.error || "Last deploy did not finish cleanly. Open the app to see why.")),
       el("div", { class:"callout mt-4", "data-simple":"" }, icon("warn", 15),
         "This app stopped working after its last update. Tap “Fix it for me” and Claude will sort it out."),
     ));
+  }
 
   // apps list
   const list = document.getElementById("apps-list");
