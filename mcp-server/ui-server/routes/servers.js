@@ -72,9 +72,12 @@ async function serverStats(req, res, ctx, params) {
   if (cfg.__error) return json(res, 503, { error: "config-unavailable" });
   if (!cfg.servers?.[name]) return json(res, 404, { error: "unknown-server", name });
 
+  // CPU: `top -bn1` reports a misleading first-sample value (we saw 94%
+  // where Dokploy's own monitor showed 2%). vmstat's 2nd sample is a real
+  // 1-second average. Column 15 is idle% on standard procps; 100-idle = used.
   const cmd = [
     "uptime -p",
-    "top -bn1 | grep 'Cpu(s)' | sed -E 's/.*([0-9]+\\.[0-9]+).*id.*/\\1/'",
+    "vmstat 1 2 | tail -1 | awk '{print $15}'",   // idle %, 1s-averaged
     "free -m | grep Mem | awk '{print $3,$2}'",
     "df -h / | tail -1 | awk '{print $5}' | tr -d %",
   ].join(" && echo '---' && ");
@@ -86,7 +89,7 @@ async function serverStats(req, res, ctx, params) {
   const [uptimeStr, cpuIdleStr, memStr, diskStr] = parts;
 
   const cpuIdle = parseFloat(cpuIdleStr);
-  const cpuUsed = Number.isFinite(cpuIdle) ? Math.round(100 - cpuIdle) : null;
+  const cpuUsed = Number.isFinite(cpuIdle) ? Math.max(0, Math.min(100, Math.round(100 - cpuIdle))) : null;
 
   const [ramUsed, ramTotal] = (memStr || "").split(/\s+/).map(Number);
   const ramPct = ramUsed && ramTotal ? Math.round((ramUsed / ramTotal) * 100) : null;

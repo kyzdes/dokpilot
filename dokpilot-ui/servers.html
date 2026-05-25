@@ -68,9 +68,157 @@
 <script>
 window.pageInit = ({ el, icon, badge, toast, DATA }) => {
   const params = new URLSearchParams(location.search);
-  let current = params.get("s") || DATA.servers[0].id;
+  let current = params.get("s") || DATA.servers[0]?.id || null;
   const listEl = document.getElementById("srv-list");
   const detailEl = document.getElementById("srv-detail");
+
+  // ── Toolbar: Add server + SSH keys (live mode only) ──────────────
+  if (window.Dok?.live) {
+    const intro = document.querySelector(".page-intro");
+    if (intro && !intro.querySelector(".srv-actions")) {
+      intro.append(el("div", { class:"srv-actions row", style:{gap:"8px",marginLeft:"auto"} },
+        el("button", { class:"btn btn-sm", onclick:openSshKeysModal }, icon("key",13), "SSH keys"),
+        el("button", { class:"btn btn-primary btn-sm", onclick:()=>openServerModal(null) }, icon("plus",13), "Add server")));
+    }
+  }
+
+  // ── helpers for live writes ──────────────────────────────────────
+  async function reloadServers() {
+    const r = await window.Dok.api("/api/servers");
+    if (!r.__error && Array.isArray(r.servers)) {
+      DATA.servers = r.servers.map(s => ({
+        id:s.id, name:s.name, ip:s.ip, ssh:s.ssh_user, dokploy:s.dokploy_version||"—",
+        status:s.status, region:"—", secret:s.secret, is_default:!!s.is_default,
+        cpu:null, ram:null, disk:null, ram_gb:"—", disk_gb:"—", uptime:"—",
+        app_count:s.app_count, apps:[],
+      }));
+      if (!DATA.servers.find(x=>x.id===current)) current = DATA.servers[0]?.id || null;
+      renderList(); renderDetail();
+      if (current) fetchStatsFor(current);
+    }
+  }
+
+  // ── Add/Edit server modal ────────────────────────────────────────
+  async function openServerModal(editName) {
+    // Fetch registered SSH keys for the dropdown
+    const keysResp = await window.Dok.api("/api/ssh-keys");
+    const regKeys = (!keysResp.__error && keysResp.keys) ? keysResp.keys : [];
+
+    const fName    = el("input", { class:"input mono", placeholder:"main", value: editName || "", disabled: editName ? "true" : null });
+    const fHost    = el("input", { class:"input mono", placeholder:"77.90.43.8 or host.example.com" });
+    const fUser    = el("input", { class:"input mono", placeholder:"root", value:"root" });
+    const fUrl     = el("input", { class:"input mono", placeholder:"http://77.90.43.8:3000" });
+    const fApiKey  = el("input", { class:"input mono", type:"password", placeholder: editName ? "(leave blank to keep current)" : "Dokploy API key" });
+    // SSH key: dropdown of registered + "custom path" option
+    const sshSelect = el("select", { class:"select mono" },
+      el("option", { value:"" }, "— no SSH key —"),
+      ...regKeys.map(k => el("option", { value:"named:"+k.name }, k.name + " (" + k.path.split("/").pop() + ")")),
+      el("option", { value:"__custom__" }, "Custom path…"));
+    const fCustomPath = el("input", { class:"input mono", placeholder:"/Users/you/.ssh/id_rsa", style:{display:"none",marginTop:"8px"} });
+    sshSelect.addEventListener("change", () => { fCustomPath.style.display = sshSelect.value === "__custom__" ? "block" : "none"; });
+
+    const overlay = el("div", { class:"overlay", onclick:(e)=>{ if(e.target===overlay) overlay.remove(); } },
+      el("div", { class:"modal" },
+        el("div", { class:"modal-head" }, icon("server",17), el("h3", null, editName ? "Edit server" : "Add server"),
+          el("button", { class:"icon-btn", style:{marginLeft:"auto"}, onclick:()=>overlay.remove() }, icon("x",16))),
+        el("div", { class:"modal-body stack" },
+          el("div", { class:"field" }, el("label", null, "Name"), fName),
+          el("div", { class:"grid grid-2" },
+            el("div", { class:"field" }, el("label", null, "Host / IP"), fHost),
+            el("div", { class:"field" }, el("label", null, "SSH user"), fUser)),
+          el("div", { class:"field" }, el("label", null, "Dokploy URL"), fUrl),
+          el("div", { class:"field" }, el("label", null, "Dokploy API key"), fApiKey,
+            el("div", { class:"hint" }, "Stored in your macOS Keychain — never written to disk in plaintext, never shown back.")),
+          el("div", { class:"field" }, el("label", null, "SSH key"), sshSelect, fCustomPath,
+            el("div", { class:"hint" }, "Only the file path is stored — the key itself never leaves your machine. Register reusable keys via “SSH keys”.")),
+          el("div", { class:"callout", id:"srv-modal-msg", style:{display:"none"} })),
+        el("div", { class:"modal-foot" },
+          el("button", { class:"btn btn-ghost", onclick:()=>overlay.remove() }, "Cancel"),
+          el("button", { class:"btn btn-primary", onclick:save }, editName ? "Save" : "Add & test"))));
+    document.body.append(overlay);
+
+    async function save(e) {
+      const btn = e.currentTarget; btn.disabled = true;
+      const msg = overlay.querySelector("#srv-modal-msg");
+      const showMsg = (txt, kind="warn") => { msg.style.display="flex"; msg.className="callout "+(kind==="warn"?"warn":""); msg.textContent = txt; };
+
+      let ssh_key = sshSelect.value;
+      if (ssh_key === "__custom__") ssh_key = fCustomPath.value.trim();
+      const payload = {
+        name: (fName.value||"").trim(), host: (fHost.value||"").trim(),
+        ssh_user: (fUser.value||"root").trim(), dokploy_url: (fUrl.value||"").trim(),
+        ssh_key: ssh_key || undefined,
+      };
+      if (fApiKey.value) payload.dokploy_api_key = fApiKey.value;
+
+      const r = await window.Dok.postAction("/api/servers", payload);
+      if (r.__error) { showMsg("Save failed: " + (r.detail || r.error || ("HTTP "+r.status))); btn.disabled=false; return; }
+      if (r.warnings) toast(r.warnings.join(" · "), "warn", true);
+
+      // Test connectivity
+      const t = await window.Dok.postAction(`/api/servers/${encodeURIComponent(payload.name)}/test`, {});
+      overlay.remove();
+      if (t.ok) toast(payload.name + " added · SSH + Dokploy OK", "check");
+      else toast(payload.name + " saved, but test failed: " + (t.ssh?.error || t.dokploy?.error || "see logs"), "warn", true);
+      await reloadServers();
+      current = payload.name; renderList(); renderDetail(); fetchStatsFor(current);
+    }
+  }
+
+  // ── SSH keys manager modal ───────────────────────────────────────
+  async function openSshKeysModal() {
+    const resp = await window.Dok.api("/api/ssh-keys");
+    const keys = (!resp.__error && resp.keys) ? resp.keys : [];
+    const unreg = (!resp.__error && resp.unregistered) ? resp.unregistered : [];
+
+    const listWrap = el("div", { class:"stack" });
+    const renderKeys = (keys, unreg) => {
+      listWrap.innerHTML = "";
+      keys.forEach(k => listWrap.append(el("div", { class:"lrow", style:{gridTemplateColumns:"1fr auto auto"} },
+        el("div", null, el("span",{class:"app-name"}, k.name),
+          el("div",{class:"dim-mono",style:{marginTop:"3px",fontSize:"var(--text-sm)"}}, k.path,
+            k.used_by.length ? el("span",{class:"dim-sep"},"·") : null,
+            k.used_by.length ? el("span",null, "used by " + k.used_by.join(", ")) : el("span",{class:"muted-dash"}," unused"))),
+        el("span", {}, ""),
+        el("button", { class:"icon-btn", title:"Remove", onclick:async()=>{
+          const r = await window.Dok.api(`/api/ssh-keys/${encodeURIComponent(k.name)}`, { method:"DELETE", headers:{ "X-CSRF": window.__DOKPILOT_TOKEN__ } });
+          if (r.__error) toast(r.hint || r.error || "delete failed", "warn", true);
+          else { toast("Removed "+k.name, "trash"); const rr = await window.Dok.api("/api/ssh-keys"); renderKeys(rr.keys||[], rr.unregistered||[]); }
+        }}, icon("trash",13)))));
+      unreg.forEach(u => listWrap.append(el("div", { class:"lrow", style:{gridTemplateColumns:"1fr auto",opacity:"0.7"} },
+        el("div", null, el("span",{class:"dim-mono"}, u.path), el("div",{class:"dim-mono",style:{marginTop:"3px",fontSize:"var(--text-sm)"}}, "used by " + u.used_by.join(", ") + " · not registered")),
+        el("span",{class:"tag-mini"},"ad-hoc"))));
+      if (!keys.length && !unreg.length) listWrap.append(el("p",{class:"muted-dash"},"No SSH keys yet. Register one below."));
+    };
+    renderKeys(keys, unreg);
+
+    const nName = el("input", { class:"input mono", placeholder:"my-hetzner-key" });
+    const nPath = el("input", { class:"input mono", placeholder:"/Users/you/.ssh/id_rsa" });
+
+    const overlay = el("div", { class:"overlay", onclick:(e)=>{ if(e.target===overlay) overlay.remove(); } },
+      el("div", { class:"modal" },
+        el("div", { class:"modal-head" }, icon("key",17), el("h3", null, "SSH keys"),
+          el("button", { class:"icon-btn", style:{marginLeft:"auto"}, onclick:()=>overlay.remove() }, icon("x",16))),
+        el("div", { class:"modal-body stack" },
+          listWrap,
+          el("div", { class:"card-pad", style:{border:"1px solid var(--border)",borderRadius:"var(--radius-lg)"} },
+            el("p", { class:"section-label" }, "Register a key"),
+            el("div", { class:"grid grid-2", style:{gap:"10px"} },
+              el("div",{class:"field"}, el("label",null,"Name"), nName),
+              el("div",{class:"field"}, el("label",null,"Path on this Mac"), nPath)),
+            el("div", { class:"hint" }, "Path to the private key file. Only the path is stored; ssh wants it at chmod 600."),
+            el("button", { class:"btn btn-primary btn-sm mt-3", onclick:async()=>{
+              const r = await window.Dok.postAction("/api/ssh-keys", { name:(nName.value||"").trim(), path:(nPath.value||"").trim() });
+              if (r.__error) { toast(r.detail || r.error || "add failed", "warn", true); return; }
+              if (r.warning) toast(r.warning, "warn", true);
+              nName.value=""; nPath.value="";
+              const rr = await window.Dok.api("/api/ssh-keys"); renderKeys(rr.keys||[], rr.unregistered||[]);
+              toast("Key registered", "check");
+            }}, icon("plus",13), "Register"))),
+        el("div", { class:"modal-foot" },
+          el("button", { class:"btn btn-ghost", onclick:()=>overlay.remove() }, "Close"))));
+    document.body.append(overlay);
+  }
 
   const meter = (label, ic, val) => {
     const known = val != null && Number.isFinite(val);
@@ -138,19 +286,48 @@ window.pageInit = ({ el, icon, badge, toast, DATA }) => {
         el("div", null, el("span",{class:"app-name"},a.name), el("div",{class:"dim-mono",style:{marginTop:"3px"}}, a.domain||el("span",{class:"muted-dash"},"no domain"))),
         badge(a.status), el("span",{class:"icon chev"}, icon("chevron",14))))));
 
-    // danger zone — CLI-only per Dokpilot design (observation-first)
-    detailEl.append(el("section", { class:"card card-pad", "data-adv":"" },
-      el("p", { class:"section-label" }, "Manage"),
-      el("div", { class:"callout" }, icon("terminal", 15),
-        el("div", null, "Adding or removing servers is done from the CLI, where credentials live in your Keychain:",
-          el("div", { class:"codeblock mt-3" }, el("span",{class:"grow"}, "/dokpilot config server add <name> <ip>"),
-            el("button",{class:"icon-btn","data-copy":"/dokpilot config server add <name> <ip>",title:"Copy"}, icon("copy",13)))))));
+    // Manage — live: edit/test/delete via UI; mock: CLI hint
+    if (window.Dok?.live) {
+      detailEl.append(el("section", { class:"card card-pad", "data-adv":"" },
+        el("p", { class:"section-label" }, "Manage"),
+        el("div", { class:"row wrap", style:{gap:"8px"} },
+          el("button", { class:"btn btn-sm", onclick:async (e)=>{
+            e.currentTarget.disabled = true; e.currentTarget.textContent = "Testing…";
+            const t = await window.Dok.postAction(`/api/servers/${encodeURIComponent(s.id)}/test`, {});
+            if (t.ok) toast(s.name + ": SSH + Dokploy OK ("+t.dokploy.project_count+" projects)", "check");
+            else toast(s.name + " test: " + (t.ssh?.error || t.dokploy?.error || "failed"), "warn", true);
+            renderDetail();
+          }}, icon("refresh",13), "Test connection"),
+          el("button", { class:"btn btn-sm", onclick:()=>openServerModal(s.id) }, icon("settings",13), "Edit"),
+          el("button", { class:"btn btn-sm btn-danger", onclick:async()=>{
+            if (DATA.servers.length <= 1) { toast("Can't remove your only server", "warn", true); return; }
+            const r = await window.Dok.api(`/api/servers/${encodeURIComponent(s.id)}`, { method:"DELETE", headers:{ "X-CSRF": window.__DOKPILOT_TOKEN__ } });
+            if (r.__error) { toast(r.error || "delete failed", "warn", true); return; }
+            toast("Removed " + s.id, "trash");
+            await reloadServers();
+          }}, icon("trash",13), "Remove")),
+        el("div", { class:"hint mt-3" }, "Credentials are stored in your macOS Keychain. SSH keys are referenced by path only.")));
+    } else {
+      detailEl.append(el("section", { class:"card card-pad", "data-adv":"" },
+        el("p", { class:"section-label" }, "Manage"),
+        el("div", { class:"callout" }, icon("terminal", 15),
+          el("div", null, "Adding or removing servers is done from the CLI, where credentials live in your Keychain:",
+            el("div", { class:"codeblock mt-3" }, el("span",{class:"grow"}, "/dokpilot config server add <name> <ip>"),
+              el("button",{class:"icon-btn","data-copy":"/dokpilot config server add <name> <ip>",title:"Copy"}, icon("copy",13)))))));
+    }
   }
 
-  renderList();
-  renderDetail();
-  // Kick the SSH stats probe in the background — meters will update when it returns.
-  fetchStatsFor(current);
+  if (current) { renderList(); renderDetail(); fetchStatsFor(current); }
+  else {
+    // No servers — empty state with Add button (live) or CLI hint (mock)
+    renderList();
+    detailEl.innerHTML = "";
+    detailEl.append(el("section", { class:"card card-pad", style:{textAlign:"center"} },
+      el("p", { class:"page-lead" }, "No servers configured yet."),
+      window.Dok?.live
+        ? el("button", { class:"btn btn-primary mt-3", onclick:()=>openServerModal(null) }, icon("plus",14), "Add your first server")
+        : el("div", { class:"codeblock mt-3" }, el("span",{class:"grow"}, "/dokpilot config server add <name> <ip>"))));
+  }
 };
 </script>
 </body>

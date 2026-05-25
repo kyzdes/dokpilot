@@ -99,7 +99,11 @@ window.pageInit = ({ el, icon, badge, toast, DATA, askClaude }) => {
   async function hydrateDetail(a) {
     if (!window.Dok?.live || !window.Dok?.api || hydrated.has(a.id)) return;
     hydrated.add(a.id);
-    const r = await window.Dok.api(`/api/apps/${encodeURIComponent(a.id)}?server=${encodeURIComponent(a.server)}`);
+    // Fetch app detail (env keys, domain, repo) + deploy history in parallel
+    const [r, dl] = await Promise.all([
+      window.Dok.api(`/api/apps/${encodeURIComponent(a.id)}?server=${encodeURIComponent(a.server)}`),
+      window.Dok.api(`/api/apps/${encodeURIComponent(a.id)}/deploys?server=${encodeURIComponent(a.server)}`),
+    ]);
     if (r.__error) { hydrated.delete(a.id); return; }
     // Patch the app in place with detail fields
     a.env = r.env_keys || [];
@@ -108,7 +112,30 @@ window.pageInit = ({ el, icon, badge, toast, DATA, askClaude }) => {
     if (r.repo) a.repo = r.repo;
     if (r.branch) a.branch = r.branch;
     if (typeof r.autodeploy === "boolean") a.autodeploy = r.autodeploy;
-    if (a.id === current) renderDetail();   // re-render with the real env list
+    // Real deploy history → DATA.deploys[id] (the Deploys tab + Last-deploy stat read this)
+    if (!dl.__error && Array.isArray(dl.deploys)) {
+      DATA.deploys[a.id] = dl.deploys.map(d => ({
+        sha: d.sha || (d.id ? d.id.slice(0, 7) : "—"),
+        branch: d.branch || a.branch || "—",
+        status: d.status === "done" ? "success" : d.status,
+        rel: d.started_at ? niceRel(d.started_at) : "—",
+        dur: d.duration_ms ? Math.round(d.duration_ms/1000) + "s" : "—",
+        msg: (d.title || "").split("\n")[0] || "(no message)",
+        log_path: d.log_path,
+        deploy_id: d.id,
+      }));
+    }
+    if (a.id === current) renderDetail();   // re-render with the real env + deploys
+  }
+
+  // Relative-time helper (mirrors app.js niceTime; local copy so the page
+  // doesn't depend on it being exported)
+  function niceRel(iso) {
+    const diff = Math.max(0, Date.now() - new Date(iso).getTime());
+    if (diff < 60000) return Math.round(diff/1000) + "s ago";
+    if (diff < 3600000) return Math.round(diff/60000) + "m ago";
+    if (diff < 86400000) return Math.round(diff/3600000) + "h ago";
+    return Math.round(diff/86400000) + "d ago";
   }
 
   function renderDetail() {
