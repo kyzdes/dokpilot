@@ -139,6 +139,27 @@ window.pageInit = ({ el, icon, badge, DATA, go }) => {
   const srvTile = tile("server", "Servers", DATA.servers.length, "all healthy");
   srvTile.setAttribute("data-adv", ""); tiles.append(srvTile);
 
+  // KYZ-103: when live, replace the app-derived counts with Dokploy's
+  // authoritative project.homeStats rollup (counts services + databases,
+  // not just the flattened app list). Tile order: [running, building,
+  // attention, servers]. "Building" stays app-derived (homeStats has no
+  // building bucket — only running/error/idle).
+  if (window.Dok?.live && window.Dok?.api) {
+    window.Dok.api("/api/overview").then(ov => {
+      if (!ov || ov.__error || !ov.totals) return;
+      const t = ov.totals;
+      const nums = tiles.querySelectorAll(".stat-tile .stat-num");
+      const subs = tiles.querySelectorAll(".stat-tile .stat-sub");
+      const srvCount = (ov.servers || []).length || DATA.servers.length;
+      if (nums[0]) nums[0].textContent = String(t.running);
+      if (subs[0]) subs[0].textContent = `${t.services} services · ${t.databases} DBs`;
+      if (nums[2]) nums[2].textContent = String(t.error);
+      if (subs[2]) subs[2].textContent = t.error === 0 ? "all healthy" : `${t.error} in error`;
+      if (nums[3]) nums[3].textContent = String(srvCount);
+      if (subs[3]) subs[3].textContent = `${t.projects} projects`;
+    });
+  }
+
   // in-flight deploy — only render the card if there's actually a real
   // in-flight job. bootData() sets DATA.__no_inflight when /api/jobs
   // returned zero non-terminal jobs (live mode), so we can short-circuit

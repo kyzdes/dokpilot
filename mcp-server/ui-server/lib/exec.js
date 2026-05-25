@@ -69,6 +69,20 @@ async function dokploy(server, method, endpoint, body) {
   }
 }
 
+/** Like dokploy() but returns the RAW response text without JSON-parsing.
+ *  Dokploy's log endpoints (application.readLogs, compose.readLogs,
+ *  deployment.readLogs) return plain text, which the JSON-parsing
+ *  dokploy() would mis-flag as an error. Returns { text } or { __error }. */
+async function dokployRaw(server, method, endpoint, body) {
+  const args = [server, method, endpoint];
+  if (body != null) args.push(typeof body === "string" ? body : JSON.stringify(body));
+  const { stdout, stderr, code, timedOut } = await runScript("dokploy-api.sh", args);
+  if (code !== 0) {
+    return { __error: true, code, stderr: stderr.slice(0, 800), timedOut };
+  }
+  return { text: stdout };
+}
+
 /* ─── cloudflare-dns.sh ─────────────────────────────────────────── */
 /**
  * Cloudflare wrapper. The script accepts subcommands `list <zone>`,
@@ -251,6 +265,7 @@ module.exports = {
   run,
   runScript,
   dokploy,
+  dokployRaw,
   cloudflareList,
   cloudflareCreate,
   cloudflareDelete,

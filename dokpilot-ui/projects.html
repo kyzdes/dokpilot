@@ -81,6 +81,38 @@ window.pageInit = ({ el, icon, badge, toast, DATA, askClaude }) => {
   const listEl = document.getElementById("app-list");
   const detailEl = document.getElementById("app-detail");
 
+  // ── Deploy-queue banner (KYZ-102) ──────────────────────────────────
+  // Shows in-flight/queued deploys with Kill-build / Cancel controls.
+  // Hidden when the queue is empty. Polls every 8s while live.
+  const mainEl = document.querySelector(".main");
+  const queueBanner = el("div", { id:"deploy-queue" });
+  mainEl.insertBefore(queueBanner, document.querySelector(".md-layout"));
+  async function renderQueue() {
+    if (!window.Dok?.live) return;
+    const r = await window.Dok.api("/api/deploy-queue");
+    queueBanner.innerHTML = "";
+    if (r.__error || !Array.isArray(r.queue) || !r.queue.length) return; // hidden when empty
+    const abort = (q, action, okMsg) => async () => {
+      const res = await window.Dok.postAction(`/api/apps/${q.app_id}/${action}`, { server:q.server, kind:q.kind });
+      if (res.__error && !res.mock) toast("Action failed: " + (res.message || ("HTTP "+res.status)), "warn", true);
+      else { toast(okMsg, "pause", action==="kill-build"); renderQueue(); }
+    };
+    const rows = r.queue.map(q => el("div", { class:"lrow", style:{gridTemplateColumns:"auto 1fr auto"} },
+      badge(q.status === "running" ? "building" : q.status),
+      el("div", null, el("span", { class:"mono", style:{fontSize:"var(--text-base)"} }, q.title || q.app_id || "(deploy)"),
+        el("div", { class:"dim-mono", style:{marginTop:"3px",fontSize:"var(--text-sm)"} }, q.server + " · " + q.kind)),
+      el("div", { class:"row", style:{gap:"6px"} },
+        q.app_id ? el("button", { class:"btn btn-sm btn-danger", onclick: abort(q, "kill-build", "Build killed") }, "Kill build") : null,
+        q.app_id ? el("button", { class:"btn btn-sm", onclick: abort(q, "cancel-deploy", "Deploy cancelled") }, "Cancel") : null)));
+    queueBanner.append(el("section", { class:"card card-pad", style:{marginBottom:"16px"} },
+      el("div", { class:"row-between mb-3" },
+        el("div", { class:"row", style:{gap:"8px"} }, icon("deploy",15), el("strong",null,"Deploy queue"), badge("building")),
+        el("button", { class:"btn btn-sm", onclick:renderQueue }, icon("refresh",13), "Refresh")),
+      el("div", { class:"card" }, ...rows)));
+  }
+  renderQueue();
+  if (window.Dok?.live) setInterval(renderQueue, 8000);
+
   function renderList() {
     listEl.innerHTML = "";
     DATA.servers.forEach(s => {
@@ -96,6 +128,9 @@ window.pageInit = ({ el, icon, badge, toast, DATA, askClaude }) => {
   // Track which app ids we've already hydrated with detail (env keys,
   // real domain, repo/branch) so we only fetch once per app.
   const hydrated = new Set();
+  // Live-tail poll handle for the Logs tab (KYZ-101). Cleared whenever the
+  // detail re-renders (app switch) or the Live toggle is turned off.
+  let logTimer = null;
   async function hydrateDetail(a) {
     if (!window.Dok?.live || !window.Dok?.api || hydrated.has(a.id)) return;
     hydrated.add(a.id);
@@ -141,6 +176,8 @@ window.pageInit = ({ el, icon, badge, toast, DATA, askClaude }) => {
   function renderDetail() {
     const a = DATA.apps[current];
     detailEl.innerHTML = "";
+    // Kill any live-tail poll from a previously-open app's Logs tab.
+    if (logTimer) { clearInterval(logTimer); logTimer = null; }
     // Kick a lazy detail fetch (env keys, real domain) — re-renders when it lands
     hydrateDetail(a);
 
@@ -167,6 +204,12 @@ window.pageInit = ({ el, icon, badge, toast, DATA, askClaude }) => {
             if (r.__error && !r.mock) toast("Restart failed: " + (r.message || ("HTTP "+r.status)), "warn", true);
             else toast(a.name + " restarted", "restart");
           }}, icon("restart", 13), "Restart"),
+          // Reload — graceful restart without a full redeploy (KYZ-104). Advanced-only.
+          el("button", { class:"btn btn-sm", "data-adv":"", onclick:async ()=>{
+            const r = await window.Dok.postAction(`/api/apps/${a.id}/reload`, { server:a.server, kind:a.kind });
+            if (r.__error && !r.mock) toast("Reload failed: " + (r.message || ("HTTP "+r.status)), "warn", true);
+            else toast(a.name + " reloaded", "refresh");
+          }}, icon("refresh", 13), "Reload"),
           el("button", { class:"btn btn-sm btn-danger", "data-adv":"", onclick:async ()=>{
             const r = await window.Dok.postAction(`/api/apps/${a.id}/stop`, { server:a.server, kind:a.kind });
             if (r.__error && !r.mock) toast("Stop failed: " + (r.message || ("HTTP "+r.status)), "warn", true);
@@ -192,9 +235,13 @@ window.pageInit = ({ el, icon, badge, toast, DATA, askClaude }) => {
     const tabBar = el("nav", { class:"tabs" });
     const panels = el("div");
     let activeTab = "overview";
+    let onLogsTab = null;   // set by the logs-panel block; loads container logs on first open
     const showTab = (id) => { activeTab = id;
       tabBar.querySelectorAll(".tab").forEach(t => t.classList.toggle("active", t.dataset.tab === id));
-      panels.querySelectorAll(".tab-panel").forEach(p => p.classList.toggle("active", p.dataset.tab === id)); };
+      panels.querySelectorAll(".tab-panel").forEach(p => p.classList.toggle("active", p.dataset.tab === id));
+      if (id === "logs" && onLogsTab) onLogsTab();
+      // Leaving the Logs tab stops any live-tail poll.
+      if (id !== "logs" && logTimer) { clearInterval(logTimer); logTimer = null; } };
 
     tabsDef.forEach(t => {
       const btn = el("button", { class:"tab", "data-tab":t.id, "data-adv": t.advOnly ? "" : null, onclick:()=>showTab(t.id) },
@@ -239,13 +286,46 @@ window.pageInit = ({ el, icon, badge, toast, DATA, askClaude }) => {
         el("div", null, el("div",{style:{fontWeight:500}},"Auto-deploy on push"), el("div",{class:"hint"},"Rebuild automatically when you push to "+ (a.autodeploy?"main":"this repo"))),
         el("label", { class:"switch" }, el("input",{type:"checkbox", checked:a.autodeploy?"true":null, onchange:(e)=>toast("Auto-deploy "+(e.target.checked?"enabled":"disabled"),"refresh")}), el("span",{class:"track"}))));
 
-    // logs panel
-    const logLines = (DATA.deploys[a.id]||[]).length ? [
-      {t:a.last,kind:"info",text:"Streaming last build log for " + a.name},
-      {t:"",kind:a.status==="error"?"error":"ok",text:a.status==="error"? a.error : "Build succeeded — container healthy"},
-    ] : [{t:"—",kind:"info",text:"No log stream — run a deploy to see output."}];
+    // logs panel — real container runtime logs via /api/apps/:id/logs (KYZ-101).
+    // Decision D-011: poll the readLogs query, no WebSocket. Load on first open,
+    // manual Refresh, and an optional Live-tail (3s poll).
+    const logPre = el("pre", { class:"log-viewer mono" },
+      el("div", { class:"log-line log-kind-info" }, el("span",{class:"log-t"},"·"), el("span",{class:"log-text"}, "Open this tab to load logs…")));
+    async function loadContainerLogs() {
+      if (!window.Dok?.live) {
+        logPre.innerHTML = "";
+        logPre.append(el("div",{class:"log-line log-kind-info"}, el("span",{class:"log-t"},"—"), el("span",{class:"log-text"}, "Live logs available when launched via /dokpilot ui.")));
+        return;
+      }
+      const r = await window.Dok.api(`/api/apps/${encodeURIComponent(a.id)}/logs?server=${encodeURIComponent(a.server)}&kind=${encodeURIComponent(a.kind||"application")}&tail=200`);
+      logPre.innerHTML = "";
+      if (r.__error || !Array.isArray(r.lines)) {
+        logPre.append(el("div",{class:"log-line log-kind-error"}, el("span",{class:"log-t"},"✕"),
+          el("span",{class:"log-text"}, "Couldn't load logs" + (r.message ? ": "+r.message : (r.status ? " (HTTP "+r.status+")" : "")))));
+        return;
+      }
+      if (!r.lines.length) {
+        logPre.append(el("div",{class:"log-line log-kind-info"}, el("span",{class:"log-t"},"·"), el("span",{class:"log-text"},"No log output yet.")));
+        return;
+      }
+      for (const l of r.lines) logPre.append(el("div",{class:"log-line log-kind-"+(l.kind||"info")},
+        el("span",{class:"log-t"}, l.t||"·"), el("span",{class:"log-text"}, l.text)));
+      logPre.scrollTop = logPre.scrollHeight;
+    }
+    onLogsTab = loadContainerLogs;   // showTab calls this on first open of the Logs tab
+    const refreshBtn = el("button", { class:"btn btn-sm", onclick:()=>loadContainerLogs() }, icon("refresh",13), "Refresh");
+    const liveBtn = el("button", { class:"btn btn-sm" }, icon("play",13), "Live tail");
+    liveBtn.onclick = () => {
+      const on = !logTimer;
+      if (logTimer) { clearInterval(logTimer); logTimer = null; }
+      liveBtn.classList.toggle("btn-primary", on);
+      if (on) { loadContainerLogs(); logTimer = setInterval(loadContainerLogs, 3000); }
+    };
     const lp = el("section", { class:"tab-panel", "data-tab":"logs" },
-      el("pre", { class:"log-viewer mono" }, ...logLines.map(l => el("div", { class:"log-line log-kind-"+l.kind }, el("span",{class:"log-t"},l.t||"·"), el("span",{class:"log-text"},l.text)))));
+      el("div", { class:"row-between mb-3" },
+        el("div", { class:"row", style:{gap:"8px"} }, icon("terminal",14), el("span",{class:"t-sm t-mut"}, "Live container logs · newest last")),
+        el("div", { class:"row", style:{gap:"8px"} }, liveBtn, refreshBtn)),
+      logPre);
 
     panels.append(ov, dp, ep, lp);
     detailEl.append(head, errBlock, el("section", { class:"card card-pad" }, tabBar, panels));

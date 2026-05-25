@@ -112,14 +112,22 @@ function makeAppAction(action) {
 
     const endpoints = {
       application: {
-        redeploy: "application.redeploy",
-        restart:  "application.start",
-        stop:     "application.stop",
+        redeploy:      "application.redeploy",
+        restart:       "application.start",
+        stop:          "application.stop",
+        reload:        "application.reload",          // KYZ-104 graceful restart
+        "kill-build":  "application.killBuild",       // KYZ-102 queue aborts
+        "cancel-deploy": "application.cancelDeployment",
+        "clean-queue": "application.cleanQueues",
       },
       compose: {
-        redeploy: "compose.deploy",
-        restart:  "compose.start",
-        stop:     "compose.stop",
+        redeploy:      "compose.redeploy",            // KYZ-104 (was compose.deploy)
+        deploy:        "compose.deploy",
+        restart:       "compose.start",
+        stop:          "compose.stop",
+        "kill-build":  "compose.killBuild",
+        "cancel-deploy": "compose.cancelDeployment",
+        "clean-queue": "compose.cleanQueues",
       },
     };
     const ep = endpoints[kind]?.[action];
@@ -192,5 +200,9 @@ module.exports = {
   "POST /api/apps/:id/redeploy":     makeAppAction("redeploy"),
   "POST /api/apps/:id/restart":      makeAppAction("restart"),
   "POST /api/apps/:id/stop":         makeAppAction("stop"),
+  "POST /api/apps/:id/reload":       makeAppAction("reload"),          // KYZ-104
+  "POST /api/apps/:id/kill-build":   makeAppAction("kill-build"),      // KYZ-102
+  "POST /api/apps/:id/cancel-deploy":makeAppAction("cancel-deploy"),   // KYZ-102
+  "POST /api/apps/:id/clean-queue":  makeAppAction("clean-queue"),     // KYZ-102
   "POST /api/databases":             createDatabase,
 };
