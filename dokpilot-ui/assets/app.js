@@ -24,6 +24,14 @@ const el = (tag, attrs, ...kids) => {
   return n;
 };
 
+/* ─── self-test instrumentation (Epic 0) ─────────────────────────────
+   Deterministic page-state probe for autonomous browser testing.
+   window.__DOK_PROBE__() (defined near the export) returns a structured
+   snapshot so claude-in-chrome can assert against it instead of brittle
+   querySelector scraping. We feed it two ring buffers populated below. */
+const _probe = { apiErrors: [], toasts: [] };
+const _ring = (arr, item, cap = 25) => { arr.push(item); if (arr.length > cap) arr.shift(); };
+
 /* ─── icon set (Lucide-aligned, 24-grid) ────────────────────────────── */
 const ICONS = {
   home:"<path d='M3 11l9-8 9 8'/><path d='M5 10v10h14V10'/>",
@@ -374,6 +382,7 @@ document.addEventListener("click", (e) => {
 /* ─── toast ─────────────────────────────────────────────────────────── */
 let toastWrap;
 function toast(msg, ic = "check", err = false) {
+  _ring(_probe.toasts, { msg: String(msg), err: !!err, t: Date.now() });
   if (!toastWrap) { toastWrap = el("div", { class:"toast-wrap" }); document.body.append(toastWrap); }
   const t = el("div", { class:"toast" + (err?" err":"") }, icon(err?"warn":ic, 16), el("span", null, msg));
   toastWrap.append(t);
@@ -410,6 +419,7 @@ async function api(path, opts = {}) {
     if (tok && !headers["Authorization"]) headers["Authorization"] = "Bearer " + tok;
     const res = await fetch(path, { credentials: "include", ...opts, headers });
     if (!res.ok) {
+      _ring(_probe.apiErrors, { path, status: res.status, t: Date.now() });
       // Try to surface the server's JSON error body for diagnostics
       try {
         const body = await res.json();
@@ -420,6 +430,7 @@ async function api(path, opts = {}) {
     }
     return await res.json();
   } catch (e) {
+    _ring(_probe.apiErrors, { path, status: 0, message: String(e?.message || e), t: Date.now() });
     return { __error: true, message: String(e?.message || e) };
   }
 }
@@ -717,6 +728,39 @@ async function startLogStream({ appId, server, deployId }, callbacks = {}) {
 
   return { close() { try { es.close(); } catch {} } };
 }
+
+/* ─── self-test probe (Epic 0) ──────────────────────────────────────
+   Returns a deterministic snapshot of the current page state. Used by
+   the autonomous browser-test loop (claude-in-chrome) to assert that a
+   page rendered live (not MOCK), has the expected action buttons, and
+   logged no API errors. Pure read — no side effects. */
+window.__DOK_PROBE__ = function () {
+  const layout = document.querySelector(".layout");
+  const content = document.querySelector(".content") || document.body;
+  const countOf = (x) => Array.isArray(x) ? x.length
+    : (x && typeof x === "object" ? Object.keys(x).length : 0);
+  const labels = $$("button, .btn, a.nav-item", content)
+    .map(b => (b.getAttribute("aria-label") || b.textContent || "").trim().replace(/\s+/g, " "))
+    .filter(Boolean);
+  const overlay = document.querySelector(".overlay, .cmdk-overlay, .modal, .claude-pop");
+  return {
+    page: layout?.dataset?.page || null,
+    live: !!(window.Dok && window.Dok.live),
+    dataSource: document.documentElement.dataset.dataSource || "mock",
+    error: _probe.apiErrors.length > 0,
+    counts: {
+      servers:   countOf(DATA.servers),
+      apps:      countOf(DATA.apps),
+      domains:   countOf(DATA.domains),
+      databases: countOf(DATA.databases),
+      deploys:   countOf(DATA.deploys),
+    },
+    actions: Array.from(new Set(labels)).slice(0, 50),
+    openModal: overlay ? (overlay.className || "modal") : null,
+    apiErrors: _probe.apiErrors.slice(-10),
+    toasts: _probe.toasts.slice(-5),
+  };
+};
 
 /* ─── expose for per-page scripts ───────────────────────────────────── */
 window.Dok = { $, $$, el, icon, badge, toast, DATA, askClaude, go, openPalette, api, postAction, startLogStream, live: false };
