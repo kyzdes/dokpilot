@@ -231,15 +231,18 @@ window.pageInit = ({ el, icon, badge, toast, DATA, askClaude }) => {
       { id:"deploys", label:"History", advLabel:"Deploys", always:true },
       { id:"env", label:"Settings", advLabel:"Env vars", always:true },
       { id:"logs", label:"Logs", advOnly:true },
+      { id:"rollback", label:"Rollback", advOnly:true },
     ];
     const tabBar = el("nav", { class:"tabs" });
     const panels = el("div");
     let activeTab = "overview";
-    let onLogsTab = null;   // set by the logs-panel block; loads container logs on first open
+    let onLogsTab = null;       // set by the logs-panel block; loads container logs on first open
+    let onRollbackTab = null;   // set by the rollback-panel block; loads rollbacks on first open
     const showTab = (id) => { activeTab = id;
       tabBar.querySelectorAll(".tab").forEach(t => t.classList.toggle("active", t.dataset.tab === id));
       panels.querySelectorAll(".tab-panel").forEach(p => p.classList.toggle("active", p.dataset.tab === id));
       if (id === "logs" && onLogsTab) onLogsTab();
+      if (id === "rollback" && onRollbackTab) onRollbackTab();
       // Leaving the Logs tab stops any live-tail poll.
       if (id !== "logs" && logTimer) { clearInterval(logTimer); logTimer = null; } };
 
@@ -327,7 +330,39 @@ window.pageInit = ({ el, icon, badge, toast, DATA, askClaude }) => {
         el("div", { class:"row", style:{gap:"8px"} }, liveBtn, refreshBtn)),
       logPre);
 
-    panels.append(ov, dp, ep, lp);
+    // rollback panel — KYZ-105. Lazy-loaded on first open via onRollbackTab.
+    const rbBody = el("div", null, el("div",{class:"callout"}, icon("clock",15), "Open this tab to load rollback points…"));
+    async function loadRollbacks() {
+      if (!window.Dok?.live) { rbBody.innerHTML=""; rbBody.append(el("div",{class:"callout"}, icon("warn",15), "Rollback available when launched via /dokpilot ui.")); return; }
+      const r = await window.Dok.api(`/api/apps/${encodeURIComponent(a.id)}/rollbacks?server=${encodeURIComponent(a.server)}`);
+      rbBody.innerHTML = "";
+      if (r.__error) { rbBody.append(el("div",{class:"callout warn"}, icon("warn",15), "Couldn't load rollbacks" + (r.message ? ": "+r.message : ""))); return; }
+      if (!r.rollback_active || !Array.isArray(r.rollbacks) || !r.rollbacks.length) {
+        rbBody.append(el("div",{class:"callout"}, icon("shield",15),
+          el("div", null, el("strong",null,"Rollbacks not enabled for this app."),
+            el("div",{class:"dim-mono mt-2"}, "Rollbacks need a Docker registry so prior images can be restored. Enable a registry + rollbacks for this app in Dokploy, then redeploy to capture a rollback point."))));
+        return;
+      }
+      rbBody.append(el("div",{class:"card"},
+        ...r.rollbacks.map(rbk => el("div",{class:"lrow",style:{gridTemplateColumns:"auto 1fr auto"}},
+          badge(rbk.status==="done"?"success":rbk.status),
+          el("div", null, el("span",{class:"mono",style:{fontSize:"var(--text-base)"}}, rbk.title),
+            el("div",{class:"dim-mono",style:{marginTop:"3px",fontSize:"var(--text-sm)"}}, rbk.finished_at ? niceRel(rbk.finished_at) : "")),
+          el("button",{class:"btn btn-sm btn-danger", onclick:async()=>{
+            if (!confirm("Roll "+a.name+" back to this image? This redeploys the previous build.")) return;
+            const res = await window.Dok.postAction(`/api/apps/${a.id}/rollback`, { server:a.server, rollback_id: rbk.rollback_id });
+            if (res.__error && !res.mock) toast("Rollback failed: "+(res.message||("HTTP "+res.status)),"warn",true);
+            else toast("Rolling back "+a.name+"…","restart");
+          }}, "Roll back")))));
+    }
+    onRollbackTab = loadRollbacks;
+    const rb = el("section", { class:"tab-panel", "data-tab":"rollback" },
+      el("div", { class:"row-between mb-3" },
+        el("div", { class:"row", style:{gap:"8px"} }, icon("restart",14), el("span",{class:"t-sm t-mut"}, "Roll back to a previous image")),
+        el("button", { class:"btn btn-sm", onclick:()=>loadRollbacks() }, icon("refresh",13), "Refresh")),
+      rbBody);
+
+    panels.append(ov, dp, ep, lp, rb);
     detailEl.append(head, errBlock, el("section", { class:"card card-pad" }, tabBar, panels));
     // ensure a visible tab if active one is advanced-only & we're in simple
     if (document.documentElement.dataset.mode === "simple" && activeTab === "logs") showTab("overview");

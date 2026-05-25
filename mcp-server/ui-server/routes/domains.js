@@ -1,6 +1,16 @@
 "use strict";
 const { json } = require("../lib/http");
-const { listServerNames, dokploy, cloudflareList, allSettledMap } = require("../lib/exec");
+const csrf = require("../lib/csrf");
+const { listServerNames, dokploy, cloudflareList, readConfig, allSettledMap } = require("../lib/exec");
+
+function readBody(req, max = 32 * 1024) {
+  return new Promise((resolve, reject) => {
+    const chunks = []; let len = 0;
+    req.on("data", (c) => { len += c.length; if (len > max) { reject(Object.assign(new Error("body too large"), { code: 413 })); req.destroy(); return; } chunks.push(c); });
+    req.on("end", () => { const b = Buffer.concat(chunks).toString("utf8"); if (!b) return resolve(null); try { resolve(JSON.parse(b)); } catch (e) { reject(Object.assign(new Error("invalid json"), { code: 400 })); } });
+    req.on("error", reject);
+  });
+}
 
 function unwrapList(r) {
   if (Array.isArray(r)) return r;
@@ -80,6 +90,7 @@ async function listDomains(req, res) {
     for (const d of r.domains) {
       allDomains.push({
         host: d.host,
+        domain_id: d.domainId,
         app: r.tuple.app_name,
         app_id: r.tuple.id,
         app_kind: r.tuple.kind,
@@ -124,6 +135,67 @@ async function listDomains(req, res) {
   json(res, 200, { domains: enriched, zone_count: zones.length });
 }
 
+/** POST /api/domains/:id/update  Body: { server, host?, port?, https?, path?, certificate_type? } */
+async function updateDomain(req, res, ctx, params) {
+  if (!csrf.check(req, ctx.token)) return json(res, 403, { error: "csrf" });
+  let body; try { body = await readBody(req); } catch (e) { return json(res, e.code || 400, { error: e.message }); }
+  const server = body?.server;
+  if (!server) return json(res, 400, { error: "missing-server" });
+  const payload = { domainId: params.id };
+  if (body.host != null) payload.host = body.host;
+  if (body.port != null) payload.port = Number(body.port);
+  if (body.https != null) payload.https = !!body.https;
+  if (body.path != null) payload.path = body.path;
+  if (body.certificate_type) payload.certificateType = body.certificate_type;
+  const r = await dokploy(server, "POST", "domain.update", payload);
+  if (r && r.__error) return json(res, 502, { error: "update-failed", ...r });
+  json(res, 200, { updated: params.id, response: r });
+}
+
+/** DELETE /api/domains/:id?server=<name> */
+async function deleteDomain(req, res, ctx, params) {
+  if (!csrf.check(req, ctx.token)) return json(res, 403, { error: "csrf" });
+  const server = req.query?.server;
+  if (!server) return json(res, 400, { error: "missing-server" });
+  const r = await dokploy(server, "POST", "domain.delete", { domainId: params.id });
+  if (r && r.__error) return json(res, 502, { error: "delete-failed", ...r });
+  json(res, 200, { deleted: params.id });
+}
+
+/** POST /api/domains/validate  Body: { server, host } — does DNS point at the server? */
+async function validateDomain(req, res, ctx) {
+  if (!csrf.check(req, ctx.token)) return json(res, 403, { error: "csrf" });
+  let body; try { body = await readBody(req); } catch (e) { return json(res, e.code || 400, { error: e.message }); }
+  const server = body?.server;
+  const host = body?.host;
+  if (!server || !host) return json(res, 400, { error: "missing-fields", required: ["server", "host"] });
+  const cfg = readConfig({ maskSecrets: false });
+  const serverIp = cfg.servers?.[server]?.host;
+  if (!serverIp) return json(res, 400, { error: "unknown-server" });
+  const r = await dokploy(server, "POST", "domain.validateDomain", { domain: host, serverIp });
+  if (r && r.__error) return json(res, 200, { ok: false, server_ip: serverIp, error: (r.stderr || "validation failed").slice(0, 300) });
+  json(res, 200, { ok: true, server_ip: serverIp, response: r });
+}
+
+/** POST /api/domains/generate  Body: { server, app_name } — quick traefik.me subdomain */
+async function generateDomain(req, res, ctx) {
+  if (!csrf.check(req, ctx.token)) return json(res, 403, { error: "csrf" });
+  let body; try { body = await readBody(req); } catch (e) { return json(res, e.code || 400, { error: e.message }); }
+  const server = body?.server;
+  if (!server) return json(res, 400, { error: "missing-server" });
+  const cfg = readConfig({ maskSecrets: false });
+  const serverId = cfg.servers?.[server]?.dokploy_server_id || undefined; // local host = undefined
+  const payload = { appName: body?.app_name || "app" };
+  if (serverId) payload.serverId = serverId;
+  const r = await dokploy(server, "POST", "domain.generateDomain", payload);
+  if (r && r.__error) return json(res, 502, { error: "generate-failed", ...r });
+  json(res, 200, { domain: r });
+}
+
 module.exports = {
   "GET /api/domains": listDomains,
+  "POST /api/domains/:id/update": updateDomain,
+  "DELETE /api/domains/:id": deleteDomain,
+  "POST /api/domains/validate": validateDomain,
+  "POST /api/domains/generate": generateDomain,
 };

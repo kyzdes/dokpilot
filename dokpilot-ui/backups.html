@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="en" data-mode="simple" data-sidebar="expanded">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dokpilot · Backups</title>
+<meta name="robots" content="noindex,nofollow">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@400;450;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/app.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 32 32%22><rect width=%2232%22 height=%2232%22 rx=%226%22 fill=%22%2339ff14%22/></svg>">
+</head>
+<body>
+<div class="layout" data-page="backups">
+  <aside class="sidebar" data-static>
+    <div class="sb-brand"><button class="sb-glyph" title="Toggle sidebar">d</button><span class="sb-word">dokpilot</span><span class="sb-ver">v4.0.0</span></div>
+    <nav class="sb-nav">
+      <a class="nav-item" href="index.html">Overview</a>
+      <a class="nav-item" href="projects.html">Projects</a>
+      <a class="nav-item active" href="backups.html">Backups</a>
+    </nav>
+  </aside>
+  <div class="content">
+    <header class="topbar" data-static>
+      <div class="topbar-title"><span class="topbar-crumb">dokpilot / backups</span><h1 class="topbar-h"><span data-adv>Backups &amp; restore</span><span data-simple>Backups</span></h1></div>
+    </header>
+    <main class="main">
+      <div class="page-intro">
+        <div class="grow"><p class="page-lead">
+          <span data-adv="">Back up your databases to S3-compatible storage on a schedule, or on demand.</span>
+          <span data-simple="">Keep safe copies of your data. Set up where backups go, then back up anytime.</span>
+        </p></div>
+      </div>
+      <div id="backups-root" data-fallback=""><div class="card card-pad"><p class="muted-dash">Loading…</p></div></div>
+    </main>
+  </div>
+</div>
+
+<script src="assets/app.js"></script>
+<script>
+window.pageInit = ({ el, icon, badge, toast, DATA }) => {
+  const root = document.getElementById("backups-root");
+  const server = (DATA.servers.find(s => s.is_default) || DATA.servers[0] || {}).id;
+
+  if (!window.Dok?.live) {
+    root.innerHTML = "";
+    root.append(el("section", { class:"card card-pad" },
+      el("div", { class:"callout" }, icon("terminal", 15),
+        "Backups management is live when the dashboard is launched via /dokpilot ui.")));
+    return;
+  }
+  if (!server) {
+    root.innerHTML = "";
+    root.append(el("section", { class:"card card-pad" }, el("p",{class:"muted-dash"},"No server configured.")));
+    return;
+  }
+
+  // ── Destinations ───────────────────────────────────────────────────
+  function openDestModal() {
+    const f = {};
+    const field = (key, label, ph, type="text") => el("div", { class:"field" },
+      el("label", null, label),
+      (f[key] = el("input", { type, class:"input", placeholder: ph })));
+    const overlay = el("div", { class:"overlay", onclick:(e)=>{ if(e.target===overlay) overlay.remove(); } },
+      el("div", { class:"modal" },
+        el("div", { class:"modal-head" }, el("h3", null, "Add S3 destination"), el("button",{class:"icon-btn",onclick:()=>overlay.remove()}, icon("x",16))),
+        el("div", { class:"modal-body" },
+          field("name","Name","my-s3"),
+          field("endpoint","Endpoint","https://s3.amazonaws.com"),
+          field("region","Region","us-east-1"),
+          field("bucket","Bucket","my-backups"),
+          field("accessKey","Access key ID",""),
+          field("secretAccessKey","Secret access key","","password")),
+        el("div", { class:"modal-foot" },
+          el("button", { class:"btn btn-ghost", onclick:()=>overlay.remove() }, "Cancel"),
+          el("button", { class:"btn btn-primary", onclick:async()=>{
+            const payload = { server, name:f.name.value, endpoint:f.endpoint.value, region:f.region.value, bucket:f.bucket.value, accessKey:f.accessKey.value, secretAccessKey:f.secretAccessKey.value, provider:"s3" };
+            if (!payload.name || !payload.bucket) { toast("Name and bucket are required", "warn", true); return; }
+            const r = await window.Dok.postAction("/api/destinations", payload);
+            if (r.__error && !r.mock) { toast("Create failed: " + (r.message || ("HTTP "+r.status)), "warn", true); return; }
+            toast("Destination added", "check"); overlay.remove(); loadDestinations();
+          }}, "Save destination"))));
+    document.body.append(overlay);
+  }
+
+  const destCard = el("section", { class:"card mb-4" });
+  async function loadDestinations() {
+    destCard.innerHTML = "";
+    destCard.append(el("div", { class:"card-head" },
+      el("h3", null, "Backup destinations"),
+      el("button", { class:"btn btn-sm btn-primary", onclick:openDestModal }, icon("plus",13), "Add destination")));
+    const r = await window.Dok.api(`/api/destinations?server=${encodeURIComponent(server)}`);
+    if (r.__error) { destCard.append(el("div",{class:"card-pad dim-mono"},"Couldn't load destinations.")); return; }
+    if (!r.destinations.length) { destCard.append(el("div",{class:"card-pad"}, el("div",{class:"callout"}, icon("archive",15), "No destinations yet. Add an S3-compatible target to enable backups."))); return; }
+    r.destinations.forEach(d => destCard.append(el("div", { class:"lrow", style:{gridTemplateColumns:"1fr auto auto"} },
+      el("div", null, el("span",{class:"mono",style:{fontSize:"var(--text-base)"}}, d.name),
+        el("div",{class:"dim-mono",style:{marginTop:"3px",fontSize:"var(--text-sm)"}}, (d.bucket||"") + (d.endpoint? " · "+d.endpoint : ""))),
+      el("button", { class:"btn btn-sm", onclick:async()=>{
+        const t = await window.Dok.postAction(`/api/destinations/${encodeURIComponent(d.destinationId)}/test`, { server });
+        toast(t.ok ? "Connection OK" : ("Test failed: " + (t.error||"")), t.ok ? "check" : "warn", !t.ok);
+      }}, "Test"),
+      el("button", { class:"btn btn-sm btn-danger", onclick:async()=>{
+        if (!confirm("Remove destination "+d.name+"?")) return;
+        const r2 = await window.Dok.api(`/api/destinations/${encodeURIComponent(d.destinationId)}?server=${encodeURIComponent(server)}`, { method:"DELETE", headers:{ "X-CSRF": window.__DOKPILOT_TOKEN__ } });
+        if (r2.__error) { toast("Remove failed", "warn", true); return; }
+        toast("Removed "+d.name, "trash"); loadDestinations();
+      }}, "Remove"))));
+  }
+
+  // ── Databases & backups ────────────────────────────────────────────
+  const ENGINE_OF = (e) => (e||"").toLowerCase().includes("postgres") ? "postgres"
+    : (e||"").toLowerCase().includes("mysql") ? "mysql"
+    : (e||"").toLowerCase().includes("maria") ? "mariadb"
+    : (e||"").toLowerCase().includes("mongo") ? "mongo"
+    : (e||"").toLowerCase().includes("redis") ? "redis" : "postgres";
+  const dbCard = el("section", { class:"card mb-4" },
+    el("div", { class:"card-head" }, el("h3", null, "Databases"), el("span",{class:"card-head-meta"}, (DATA.databases||[]).length + " databases")),
+    ...((DATA.databases||[]).length
+      ? DATA.databases.map(db => el("div", { class:"lrow", style:{gridTemplateColumns:"1fr auto auto"} },
+          el("div", null, el("span",{class:"mono",style:{fontSize:"var(--text-base)"}}, db.name),
+            el("div",{class:"dim-mono",style:{marginTop:"3px",fontSize:"var(--text-sm)"}}, (db.engine||"") + (db.server? " · "+db.server : ""))),
+          badge(db.status||"running"),
+          el("button", { class:"btn btn-sm", onclick:async()=>{
+            // List backups for this DB; if one exists, trigger a manual run.
+            const eng = ENGINE_OF(db.engine);
+            const bl = await window.Dok.api(`/api/backups?server=${encodeURIComponent(db.server||server)}&engine=${eng}&id=${encodeURIComponent(db.id)}`);
+            if (bl.__error || !Array.isArray(bl.backups) || !bl.backups.length) {
+              toast("No backup configured for "+db.name+". Add one in Dokploy first.", "warn", true); return;
+            }
+            const bId = bl.backups[0].backupId;
+            const r = await window.Dok.postAction("/api/backups/manual", { server: db.server||server, engine: eng, backup_id: bId });
+            if (r.__error && !r.mock) toast("Backup failed: " + (r.message||("HTTP "+r.status)), "warn", true);
+            else toast("Backing up "+db.name+"…", "archive");
+          }}, icon("archive",13), "Backup now")))
+      : [el("div",{class:"card-pad dim-mono"},"No databases.")]));
+
+  // ── Restore note (deferred per D-011) ───────────────────────────────
+  const restoreNote = el("section", { class:"card card-pad", "data-adv":"" },
+    el("div", { class:"callout" }, icon("shield",15),
+      el("div", null, el("strong",null,"Restore"),
+        el("div",{class:"dim-mono mt-2"}, "Restoring streams live logs over a WebSocket, which the dashboard doesn't bridge yet — run restores from the Dokploy admin for now. (Tracked: v4.1 streaming follow-up.)"))));
+
+  root.innerHTML = "";
+  root.append(destCard, dbCard, restoreNote);
+  loadDestinations();
+};
+</script>
+</body>
+</html>

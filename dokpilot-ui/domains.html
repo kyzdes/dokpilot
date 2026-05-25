@@ -101,9 +101,50 @@ window.pageInit = ({ el, icon, badge, toast, DATA }) => {
     el("span",null,"HTTPS"),
     el("span",null,""));
 
+  // Edit-domain modal (KYZ-108) — host / port / https → domain.update
+  function openEditDomain(d) {
+    const hostI = el("input", { class:"input mono", value:d.host });
+    const portI = el("input", { class:"input mono", type:"number", value:String(d.port||80) });
+    const httpsI = el("input", { type:"checkbox", checked: d.https !== false ? "true" : null });
+    const overlay = el("div", { class:"overlay", onclick:(e)=>{ if(e.target===overlay) overlay.remove(); } },
+      el("div", { class:"modal" },
+        el("div", { class:"modal-head" }, el("h3", null, "Edit domain"), el("button",{class:"icon-btn",onclick:()=>overlay.remove()}, icon("x",16))),
+        el("div", { class:"modal-body stack" },
+          el("div",{class:"field"}, el("label",null,"Host"), hostI),
+          el("div",{class:"field"}, el("label",null,"Port"), portI),
+          el("label",{class:"row",style:{gap:"10px",cursor:"pointer"}}, el("span",{class:"switch"}, httpsI, el("span",{class:"track"})), "HTTPS")),
+        el("div", { class:"modal-foot" },
+          el("button",{class:"btn btn-ghost",onclick:()=>overlay.remove()},"Cancel"),
+          el("button",{class:"btn btn-primary",onclick:async()=>{
+            const r = await window.Dok.postAction(`/api/domains/${encodeURIComponent(d.domain_id)}/update`, { server:d.server, host:hostI.value.trim(), port:Number(portI.value)||80, https:httpsI.checked });
+            if (r.__error && !r.mock) { toast("Update failed: "+(r.message||("HTTP "+r.status)),"warn",true); return; }
+            toast("Updated "+hostI.value, "check"); overlay.remove(); setTimeout(()=>location.reload(), 900);
+          }},"Save"))));
+    document.body.append(overlay);
+  }
+
   const rows = document.getElementById("dns-rows");
   DATA.domains.forEach(d => {
     const k = sslKind[d.ssl];
+    const actions = el("div", { class:"row", style:{gap:"6px",justifyContent:"flex-end"} });
+    if (window.Dok?.live) {
+      actions.append(
+        el("button", { class:"icon-btn", title:"Validate DNS points to the server", onclick:async()=>{
+          const r = await window.Dok.postAction("/api/domains/validate", { server:d.server, host:d.host });
+          toast(r.ok ? (d.host+" → "+(r.server_ip||"server")+" OK") : ("DNS check: "+(r.error||"not resolving yet")), r.ok?"check":"warn", !r.ok);
+        }}, icon("shield",13)),
+        d.domain_id ? el("button", { class:"icon-btn", "data-adv":"", title:"Edit", onclick:()=>openEditDomain(d) }, icon("settings",13)) : null,
+        d.domain_id ? el("button", { class:"icon-btn btn-danger", "data-adv":"", title:"Delete", onclick:async()=>{
+          if (!confirm("Delete domain "+d.host+"? (removes the route in Dokploy)")) return;
+          const r = await window.Dok.api(`/api/domains/${encodeURIComponent(d.domain_id)}?server=${encodeURIComponent(d.server)}`, { method:"DELETE", headers:{ "X-CSRF": window.__DOKPILOT_TOKEN__ } });
+          if (r.__error) { toast("Delete failed", "warn", true); return; }
+          toast("Deleted "+d.host, "trash"); setTimeout(()=>location.reload(), 900);
+        }}, icon("trash",13)) : null);
+    } else {
+      actions.append(d.ssl === "issuing"
+        ? el("button", { class:"ask-claude sm", "data-claude":"dns-help" }, icon("spark",11), el("span",{ "data-adv":"" },"Why?"), el("span",{ "data-simple":"" },"Ask"))
+        : el("button", { class:"icon-btn", "data-copy":d.host, title:"Copy domain" }, icon("copy",13)));
+    }
     rows.append(el("div", { class:"lrow", style:{gridTemplateColumns:cols} },
       el("div", null,
         el("a", { class:"mono", href:"https://"+d.host, target:"_blank", style:{fontSize:"var(--text-lg)",color:"var(--info)"} }, d.host, " ", icon("ext",10)),
@@ -111,9 +152,7 @@ window.pageInit = ({ el, icon, badge, toast, DATA }) => {
       el("span", { class:"dim-mono", "data-adv":"" }, d.app),
       el("span", { class:"dim-mono", "data-adv":"" }, d.record),
       el("span", { class:"badge badge-"+k }, el("span",{class:"dot dot-"+k+(d.ssl==="issuing"?" dot-pulse":"")}), sslLabel[d.ssl] + (d.ssl==="active" && d.ssl_exp ? " · "+d.ssl_exp : "")),
-      d.ssl === "issuing"
-        ? el("button", { class:"ask-claude sm", "data-claude":"dns-help" }, icon("spark",11), el("span",{ "data-adv":"" },"Why?"), el("span",{ "data-simple":"" },"Ask"))
-        : el("button", { class:"icon-btn", "data-copy":d.host, title:"Copy domain" }, icon("copy",13))));
+      actions));
   });
 
   // add-domain modal

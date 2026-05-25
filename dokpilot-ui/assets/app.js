@@ -71,6 +71,8 @@ const ICONS = {
   user:"<circle cx='12' cy='8' r='4'/><path d='M5 21a7 7 0 0 1 14 0'/>",
   panel:"<rect x='3' y='4' width='18' height='16' rx='2'/><line x1='9' y1='4' x2='9' y2='20'/>",
   filter:"<polygon points='3 4 21 4 14 12 14 19 10 21 10 12 3 4'/>",
+  archive:"<rect x='3' y='4' width='18' height='4' rx='1'/><path d='M5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8'/><line x1='10' y1='12' x2='14' y2='12'/>",
+  bell:"<path d='M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9'/><path d='M13.7 21a2 2 0 0 1-3.4 0'/>",
 };
 const icon = (name, size = 16) =>
   el("span", { class: "icon", "aria-hidden": "true",
@@ -179,6 +181,8 @@ const NAV = [
   { group:"Infrastructure", adv:true, items:[
     { id:"servers",  href:"servers.html", icon:"server",  adv:"Servers",  simple:"Servers", admin:true },
     { id:"databases",href:"databases.html", icon:"database", adv:"Databases", simple:"Databases", admin:true },
+    { id:"backups",  href:"backups.html", icon:"archive", adv:"Backups", simple:"Backups", admin:true },
+    { id:"notifications", href:"notifications.html", icon:"bell", adv:"Notifications", simple:"Alerts", admin:true },
   ]},
   { group:null, items:[
     { id:"assistant",href:"assistant.html", icon:"spark", adv:"Claude console", simple:"Ask Claude" },
@@ -192,6 +196,8 @@ const PAGE_META = {
   domains:{ crumb:"dokpilot / domains", adv:"Domains & DNS", simple:"Domains" },
   servers:{ crumb:"dokpilot / servers", adv:"Servers", simple:"Servers" },
   databases:{ crumb:"dokpilot / databases", adv:"Databases", simple:"Databases" },
+  backups:{ crumb:"dokpilot / backups", adv:"Backups & restore", simple:"Backups" },
+  notifications:{ crumb:"dokpilot / notifications", adv:"Notifications", simple:"Alerts" },
   assistant:{ crumb:"dokpilot / assistant", adv:"Claude console", simple:"Ask Claude" },
   settings:{ crumb:"dokpilot / settings", adv:"Settings", simple:"Settings" },
 };

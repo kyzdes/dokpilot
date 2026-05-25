@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="en" data-mode="simple" data-sidebar="expanded">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dokpilot · Notifications</title>
+<meta name="robots" content="noindex,nofollow">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@400;450;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/app.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 32 32%22><rect width=%2232%22 height=%2232%22 rx=%226%22 fill=%22%2339ff14%22/></svg>">
+</head>
+<body>
+<div class="layout" data-page="notifications">
+  <aside class="sidebar" data-static>
+    <div class="sb-brand"><button class="sb-glyph" title="Toggle sidebar">d</button><span class="sb-word">dokpilot</span><span class="sb-ver">v4.0.0</span></div>
+    <nav class="sb-nav">
+      <a class="nav-item" href="index.html">Overview</a>
+      <a class="nav-item" href="projects.html">Projects</a>
+      <a class="nav-item active" href="notifications.html">Notifications</a>
+    </nav>
+  </aside>
+  <div class="content">
+    <header class="topbar" data-static>
+      <div class="topbar-title"><span class="topbar-crumb">dokpilot / notifications</span><h1 class="topbar-h"><span data-adv>Notifications</span><span data-simple>Alerts</span></h1></div>
+    </header>
+    <main class="main">
+      <div class="page-intro">
+        <div class="grow"><p class="page-lead">
+          <span data-adv="">Get pinged on deploys, build failures, and server thresholds via Telegram, Slack, Discord and more.</span>
+          <span data-simple="">Get a message when something happens — a deploy finishes, a build fails, or a server runs hot.</span>
+        </p></div>
+      </div>
+      <div id="notif-root" data-fallback=""><div class="card card-pad"><p class="muted-dash">Loading…</p></div></div>
+    </main>
+  </div>
+</div>
+
+<script src="assets/app.js"></script>
+<script>
+window.pageInit = ({ el, icon, badge, toast, DATA }) => {
+  const root = document.getElementById("notif-root");
+  const server = (DATA.servers.find(s => s.is_default) || DATA.servers[0] || {}).id;
+
+  if (!window.Dok?.live) {
+    root.innerHTML = "";
+    root.append(el("section", { class:"card card-pad" }, el("div",{class:"callout"}, icon("terminal",15),
+      "Notifications management is live when launched via /dokpilot ui.")));
+    return;
+  }
+  if (!server) { root.innerHTML=""; root.append(el("section",{class:"card card-pad"}, el("p",{class:"muted-dash"},"No server configured."))); return; }
+
+  const EVENTS = [
+    ["appDeploy","Deploy finished"], ["appBuildError","Build failed"],
+    ["databaseBackup","Database backup"], ["volumeBackup","Volume backup"],
+    ["dokployRestart","Dokploy restart"], ["dokployBackup","Dokploy backup"],
+    ["dockerCleanup","Docker cleanup"], ["serverThreshold","Server threshold"],
+  ];
+
+  // ── Add Telegram channel modal (test-before-save) ──────────────────
+  function openAddModal() {
+    const nameI = el("input", { class:"input", placeholder:"My alerts" });
+    const tokenI = el("input", { class:"input mono", type:"password", placeholder:"bot token" });
+    const chatI = el("input", { class:"input mono", placeholder:"chat id" });
+    const evInputs = {};
+    const evRows = EVENTS.map(([k,label]) => el("label", { class:"row", style:{gap:"8px",cursor:"pointer",padding:"4px 0"} },
+      (evInputs[k] = el("input", { type:"checkbox", checked: (k==="appDeploy"||k==="appBuildError") ? "true" : null })), label));
+    const collect = () => ({ server, type:"telegram", name:nameI.value.trim(), botToken:tokenI.value.trim(), chatId:chatI.value.trim(), messageThreadId:"" });
+    const overlay = el("div", { class:"overlay", onclick:(e)=>{ if(e.target===overlay) overlay.remove(); } },
+      el("div", { class:"modal" },
+        el("div", { class:"modal-head" }, icon("bell",17), el("h3", null, "Add Telegram alerts"), el("button",{class:"icon-btn",style:{marginLeft:"auto"},onclick:()=>overlay.remove()}, icon("x",16))),
+        el("div", { class:"modal-body stack" },
+          el("div",{class:"field"}, el("label",null,"Name"), nameI),
+          el("div",{class:"field"}, el("label",null,"Bot token"), tokenI),
+          el("div",{class:"field"}, el("label",null,"Chat ID"), chatI),
+          el("div",{class:"field"}, el("label",null,"Notify on"), el("div",{class:"stack",style:{gap:"2px"}}, ...evRows)),
+          el("div",{class:"hint"}, "The bot token is sent straight to Dokploy and never shown again here.")),
+        el("div", { class:"modal-foot" },
+          el("button", { class:"btn btn-ghost", onclick:()=>overlay.remove() }, "Cancel"),
+          el("button", { class:"btn", onclick:async(e)=>{
+            const c = collect(); if (!c.botToken || !c.chatId) { toast("Token and chat ID required","warn",true); return; }
+            e.currentTarget.disabled = true; e.currentTarget.textContent = "Testing…";
+            const t = await window.Dok.postAction("/api/notifications/test", { server, type:"telegram", botToken:c.botToken, chatId:c.chatId, messageThreadId:"" });
+            e.currentTarget.disabled = false; e.currentTarget.textContent = "Send test";
+            toast(t.ok ? "Test message sent — check Telegram" : ("Test failed: "+(t.error||"")), t.ok?"check":"warn", !t.ok);
+          }}, "Send test"),
+          el("button", { class:"btn btn-primary", onclick:async()=>{
+            const c = collect(); if (!c.name || !c.botToken || !c.chatId) { toast("Name, token and chat ID required","warn",true); return; }
+            const events = {}; for (const [k] of EVENTS) events[k] = !!evInputs[k].checked;
+            const r = await window.Dok.postAction("/api/notifications", { ...c, events });
+            if (r.__error && !r.mock) { toast("Create failed: "+(r.message||("HTTP "+r.status)),"warn",true); return; }
+            toast("Telegram alerts added", "check"); overlay.remove(); load();
+          }}, "Save"))));
+    document.body.append(overlay);
+  }
+
+  async function load() {
+    root.innerHTML = "";
+    const card = el("section", { class:"card mb-4" },
+      el("div", { class:"card-head" }, el("h3", null, "Alert channels"),
+        el("button", { class:"btn btn-sm btn-primary", onclick:openAddModal }, icon("plus",13), "Add Telegram")));
+    root.append(card);
+    const r = await window.Dok.api(`/api/notifications?server=${encodeURIComponent(server)}`);
+    if (r.__error) { card.append(el("div",{class:"card-pad dim-mono"},"Couldn't load notifications.")); return; }
+    if (!r.notifications.length) { card.append(el("div",{class:"card-pad"}, el("div",{class:"callout"}, icon("bell",15), "No alert channels yet. Add one to get pinged on deploys and failures."))); return; }
+    r.notifications.forEach(n => {
+      const onEvents = EVENTS.filter(([k]) => n.events[k]).map(([,label]) => label);
+      card.append(el("div", { class:"lrow", style:{gridTemplateColumns:"1fr auto auto"} },
+        el("div", null, el("div",{class:"row",style:{gap:"8px"}}, el("span",{class:"mono",style:{fontSize:"var(--text-base)"}}, n.name), badge(n.type==="telegram"?"running":"active")),
+          el("div",{class:"dim-mono",style:{marginTop:"3px",fontSize:"var(--text-sm)"}}, onEvents.length ? onEvents.join(" · ") : "no events enabled")),
+        el("span", { class:"pill" }, n.type),
+        el("button", { class:"btn btn-sm btn-danger", onclick:async()=>{
+          if (!confirm("Remove alert channel "+n.name+"?")) return;
+          const r2 = await window.Dok.api(`/api/notifications/${encodeURIComponent(n.notification_id)}?server=${encodeURIComponent(server)}`, { method:"DELETE", headers:{ "X-CSRF": window.__DOKPILOT_TOKEN__ } });
+          if (r2.__error) { toast("Remove failed","warn",true); return; }
+          toast("Removed "+n.name, "trash"); load();
+        }}, "Remove")));
+    });
+  }
+  load();
+};
+</script>
+</body>
+</html>

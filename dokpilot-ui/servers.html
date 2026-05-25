@@ -286,6 +286,37 @@ window.pageInit = ({ el, icon, badge, toast, DATA }) => {
         el("div", null, el("span",{class:"app-name"},a.name), el("div",{class:"dim-mono",style:{marginTop:"3px"}}, a.domain||el("span",{class:"muted-dash"},"no domain"))),
         badge(a.status), el("span",{class:"icon chev"}, icon("chevron",14))))));
 
+    // Containers (KYZ-106) — live Docker containers on this server, with
+    // restart / stop / remove controls. Auto-loads when live.
+    if (window.Dok?.live) {
+      const cbody = el("div", null, el("div", { class:"card-pad dim-mono" }, "Loading containers…"));
+      detailEl.append(el("section", { class:"card mb-4", "data-adv":"" },
+        el("div", { class:"card-head" }, el("h3", null, "Containers"),
+          el("button", { class:"btn btn-sm", onclick:()=>loadContainers() }, icon("refresh",13), "Refresh")),
+        cbody));
+      async function loadContainers() {
+        const r = await window.Dok.api(`/api/servers/${encodeURIComponent(s.id)}/containers`);
+        cbody.innerHTML = "";
+        if (r.__error || !Array.isArray(r.containers)) { cbody.append(el("div",{class:"card-pad dim-mono"},"Couldn't load containers" + (r.message ? ": "+r.message : ""))); return; }
+        if (!r.containers.length) { cbody.append(el("div",{class:"card-pad dim-mono"},"No containers running.")); return; }
+        const act = (cid, action, confirmMsg, okMsg) => async () => {
+          if (confirmMsg && !confirm(confirmMsg)) return;
+          const res = await window.Dok.postAction(`/api/servers/${encodeURIComponent(s.id)}/containers/${encodeURIComponent(cid)}/${action}`, {});
+          if (res.__error && !res.mock) toast("Action failed: " + (res.message || ("HTTP "+res.status)), "warn", true);
+          else { toast(okMsg, "refresh"); setTimeout(loadContainers, 900); }
+        };
+        r.containers.forEach(c => cbody.append(el("div", { class:"lrow", style:{gridTemplateColumns:"auto 1fr auto"} },
+          el("span", { class:"dot dot-" + (c.state === "running" ? "success" : "muted") }),
+          el("div", null, el("span",{class:"mono",style:{fontSize:"var(--text-base)"}}, c.name),
+            el("div",{class:"dim-mono",style:{marginTop:"3px",fontSize:"var(--text-sm)"}}, c.image + (c.ports ? " · "+c.ports : "") + " · " + c.status)),
+          el("div", { class:"row", style:{gap:"6px"} },
+            el("button", { class:"btn btn-sm", title:"Restart", onclick:act(c.id,"restart",null,"Restarting "+c.name) }, icon("restart",13)),
+            el("button", { class:"btn btn-sm", title:"Stop", onclick:act(c.id,"stop","Stop "+c.name+"?","Stopped "+c.name) }, icon("pause",13)),
+            el("button", { class:"btn btn-sm btn-danger", title:"Remove", onclick:act(c.id,"remove","Remove container "+c.name+"? This cannot be undone.","Removed "+c.name) }, icon("trash",13))))));
+      }
+      loadContainers();
+    }
+
     // Manage — live: edit/test/delete via UI; mock: CLI hint
     if (window.Dok?.live) {
       detailEl.append(el("section", { class:"card card-pad", "data-adv":"" },
