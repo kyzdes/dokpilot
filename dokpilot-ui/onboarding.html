@@ -1,0 +1,356 @@
+<!doctype html>
+<html lang="en" data-mode="simple" data-sidebar="expanded">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dokpilot · Get started</title>
+<meta name="robots" content="noindex,nofollow">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@400;450;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/app.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 32 32%22><rect width=%2232%22 height=%2232%22 rx=%226%22 fill=%22%2339ff14%22/></svg>">
+</head>
+<body>
+<div class="layout" data-page="onboarding">
+  <aside class="sidebar" data-static>
+    <div class="sb-brand"><button class="sb-glyph" title="Toggle sidebar">d</button><span class="sb-word">dokpilot</span><span class="sb-ver">v4.0.0</span></div>
+    <nav class="sb-nav">
+      <a class="nav-item active" href="onboarding.html">Get started</a>
+      <a class="nav-item" href="index.html">Overview</a>
+      <a class="nav-item" href="projects.html">Projects</a>
+    </nav>
+  </aside>
+  <div class="content">
+    <header class="topbar" data-static>
+      <div class="topbar-title"><span class="topbar-crumb">dokpilot / get started</span><h1 class="topbar-h"><span data-adv>First deploy</span><span data-simple>Let's deploy your first app</span></h1></div>
+    </header>
+    <main class="main">
+      <section class="card card-pad mb-4"><div class="stepper" id="onb-stepper" data-fallback=""></div></section>
+      <div id="wiz" data-fallback=""><div class="card card-pad"><p class="muted-dash">Loading…</p></div></div>
+    </main>
+  </div>
+</div>
+
+<script src="assets/app.js"></script>
+<script>
+window.pageInit = ({ el, icon, badge, toast, DATA }) => {
+  const wiz = document.getElementById("wiz");
+  const stepperEl = document.getElementById("onb-stepper");
+  const live = !!(window.Dok && window.Dok.live);
+  const post = (p, b) => window.Dok.postAction(p, b);
+
+  // ── wizard state (exposed for the self-test probe) ──
+  const W = window.__ONB__ = {
+    stage: "repo",
+    repo: { url:"", normalized:"", visibility:"", stack_hint:null, default_branch:"main", ok:false },
+    server: { mode: (DATA.servers && DATA.servers.length) ? "existing" : "new", name:"", host:"", ssh_user:"root", ssh_key:"", has_dokploy:"dunno", saved:false },
+    dokploy: { installed:null, choice:null, api_key_set:false },
+    where: { mode:"url", domain:"", cf_token:"" },
+  };
+  const STAGES = ["repo","scan","server","dokploy","where","deploy"];
+  const STEP_OF = { repo:0, scan:0, server:1, dokploy:1, where:2, deploy:3 };
+  const STEP_LABELS = ["Your app","Your server","Where it lives","Deploy"];
+
+  function setStage(s) { W.stage = s; wiz.dataset.stage = s; renderStepper(); render(); }
+  // Test affordance (used by the autonomous browser self-test to jump stages
+  // without firing mutating server/deploy calls). Harmless in production.
+  window.__ONB_GO__ = setStage;
+
+  function renderStepper() {
+    const active = STEP_OF[W.stage];
+    stepperEl.innerHTML = "";
+    STEP_LABELS.forEach((label, i) => {
+      const st = i < active ? "done" : i === active ? "active" : "pending";
+      stepperEl.append(el("div", { class:"step step-" + st },
+        el("span", { class:"step-num" }, st === "done" ? icon("check", 13) : String(i + 1)),
+        el("div", { class:"step-body" }, el("span", { class:"step-label" }, label),
+          el("span", { class:"step-meta" }, st === "active" ? "in progress" : st === "done" ? "done" : ""))));
+      if (i < STEP_LABELS.length - 1) stepperEl.append(el("div", { class:"step-conn" + (i < active ? " done" : "") }));
+    });
+  }
+
+  const cardPad = (...kids) => el("section", { class:"card card-pad stack" }, ...kids);
+  const navRow = (backFn, nextLabel, nextFn, nextDisabled) => el("div", { class:"row-between wrap", style:{gap:"12px",marginTop:"4px"} },
+    backFn ? el("button", { class:"btn btn-ghost", onclick:backFn }, "Back") : el("span"),
+    el("button", { class:"btn btn-primary", disabled: nextDisabled ? "true" : null, onclick:nextFn }, nextLabel || "Continue", icon("chevron", 14)));
+
+  // ─────────────────────────── Stage 1 + 2 — repo + scan ───────────────
+  function renderRepo() {
+    const input = el("input", { class:"input mono", id:"onb-repo", placeholder:"github.com/your-name/your-app", value:W.repo.url });
+    const result = el("div", { id:"scan-result" });
+    const scan = async () => {
+      const url = input.value.trim(); W.repo.url = url;
+      if (!url) { toast("Paste a GitHub link first", "warn", true); return; }
+      result.innerHTML = ""; result.append(el("div", { class:"callout" }, icon("refresh", 15), "Scanning " + url + "…"));
+      const r = live ? await post("/api/onboarding/scan-repo", { url }) : { __error:true, mock:true };
+      result.innerHTML = "";
+      if (r.__error && r.mock) { // demo mode — pretend success
+        Object.assign(W.repo, { normalized:url, visibility:"public", stack_hint:"Next.js", ok:true });
+        result.append(okScan()); return;
+      }
+      if (r.__error) { result.append(el("div", { class:"callout warn" }, icon("warn",15), "Scan failed: " + (r.message || ("HTTP "+r.status)))); return; }
+      Object.assign(W.repo, { normalized:r.normalized, visibility:r.visibility, stack_hint:r.stack_hint, default_branch:r.default_branch || "main", ok:!!r.ok });
+      result.append(r.ok ? okScan() : errScan(r.reason));
+    };
+    function okScan() {
+      W.repo.ok = true;
+      return el("div", { class:"callout", style:{borderColor:"var(--accent-line)",background:"var(--accent-soft)"} },
+        el("span", { style:{color:"var(--accent)"} }, icon("check", 16)),
+        el("div", null, el("strong", null, "Project detected — ready to deploy"),
+          el("div", { class:"dim-mono mt-2" }, W.repo.normalized + (W.repo.stack_hint ? " · " + W.repo.stack_hint : "") + " · branch " + W.repo.default_branch)));
+    }
+    function errScan(reason) {
+      W.repo.ok = false;
+      return el("div", { class:"callout warn" }, icon("warn", 16),
+        el("div", null, el("strong", null, "Can't read this repo yet"),
+          el("div", { class:"dim-mono mt-2" }, reason || "Check the URL and try again."),
+          el("div", { class:"hint mt-2" }, "Private repo? You can still continue — Dokpilot uses your GitHub access on the server during deploy.")));
+    }
+    wiz.append(cardPad(
+      el("div", { class:"field" },
+        el("label", null, el("span",{ "data-adv":"" },"Repository"), el("span",{ "data-simple":"" },"Your GitHub link")),
+        el("div", { class:"input-group" }, input, el("button", { class:"btn", type:"button", onclick:scan }, icon("search", 13), "Scan")),
+        el("div", { class:"hint" }, "Public or private. We only read it to detect the stack.")),
+      result,
+      navRow(null, "Continue", () => {
+        if (!W.repo.url) { toast("Paste and scan a repo first", "warn", true); return; }
+        // Allow continuing even on private/unknown — deploy can still use server-side GitHub access.
+        setStage("server");
+      })));
+    if (W.repo.normalized) { /* re-show last scan */ result.append(W.repo.ok ? okScan() : el("div")); }
+  }
+
+  // ─────────────────────────── Stage 3 — server ────────────────────────
+  function renderServer() {
+    const existing = (DATA.servers || []).filter(s => s && s.id);
+    const useExisting = W.server.mode === "existing" && existing.length;
+
+    const tabNew = el("button", { class:"btn btn-sm" + (W.server.mode==="new"?" btn-primary":""), onclick:()=>{ W.server.mode="new"; render(); } }, "Add a new server");
+    const tabHave = el("button", { class:"btn btn-sm" + (W.server.mode==="existing"?" btn-primary":""), disabled: existing.length?null:"true", onclick:()=>{ W.server.mode="existing"; render(); } }, "Use an existing one");
+
+    let body;
+    if (useExisting) {
+      body = el("div", { class:"md-list", style:{flexFlow:"wrap"} },
+        ...existing.map(s => el("button", { class:"md-item" + (W.server.name===s.id?" active":""), type:"button", onclick:()=>{ W.server.name=s.id; W.server.host=s.ip; render(); } },
+          el("div", { class:"md-name" }, icon("server",15), s.name, s.is_default?el("span",{class:"tag-mini"},"default"):null),
+          el("div", { class:"md-sub" }, s.ip + (s.dokploy?" · dokploy "+s.dokploy:"")))));
+    } else {
+      const nameI = el("input", { class:"input mono", placeholder:"my-server", value:W.server.name });
+      const hostI = el("input", { class:"input mono", placeholder:"77.90.43.8", value:W.server.host });
+      const userSel = el("select", { class:"select mono" }, ...["root","ubuntu","admin","debian"].map(u => el("option", { value:u, selected: u===W.server.ssh_user?"true":null }, u)));
+      const keyI = el("input", { class:"input mono", placeholder:"~/.ssh/id_ed25519", value:W.server.ssh_key });
+      nameI.oninput = ()=>W.server.name=nameI.value.trim();
+      hostI.oninput = ()=>W.server.host=hostI.value.trim();
+      userSel.onchange = ()=>W.server.ssh_user=userSel.value;
+      keyI.oninput = ()=>W.server.ssh_key=keyI.value.trim();
+      body = el("div", { class:"stack" },
+        el("div", { class:"grid grid-2" },
+          el("div", { class:"field" }, el("label", null, "Name"), nameI),
+          el("div", { class:"field" }, el("label", null, "Host / IP"), hostI)),
+        el("div", { class:"grid grid-2" },
+          el("div", { class:"field" }, el("label", null, "SSH user"), userSel),
+          el("div", { class:"field" }, el("label", null, "SSH key (local path)"), keyI)),
+        el("div", { class:"hint" }, "The key stays on your machine — we reference it by path, never copy it."));
+    }
+
+    // "Is Dokploy already here?" — yes / no / not sure
+    const dkRadio = (val, label) => el("label", { class:"row", style:{gap:"8px",cursor:"pointer",padding:"4px 10px",border:"1px solid var(--border)",borderRadius:"var(--radius-md)",background: W.server.has_dokploy===val?"var(--surface-hover)":"transparent"} },
+      el("input", { type:"radio", name:"hasdk", checked: W.server.has_dokploy===val?"true":null, onchange:()=>{ W.server.has_dokploy=val; } }), label);
+
+    wiz.append(cardPad(
+      el("div", { class:"row", style:{gap:"8px"} }, tabNew, tabHave),
+      body,
+      el("div", { class:"field" },
+        el("label", null, "Is Dokploy already installed on this server?"),
+        el("div", { class:"row", style:{gap:"10px",flexWrap:"wrap"} }, dkRadio("yes","Yes"), dkRadio("no","No"), dkRadio("dunno","Not sure"))),
+      navRow(()=>setStage("repo"), "Continue", onServerNext)));
+  }
+
+  async function onServerNext() {
+    if (W.server.mode === "new") {
+      if (!W.server.name || !W.server.host) { toast("Enter a name and host", "warn", true); return; }
+      if (live) {
+        const r = await post("/api/servers", { name:W.server.name, host:W.server.host, ssh_user:W.server.ssh_user, ssh_key:W.server.ssh_key || undefined, dokploy_url:"http://"+W.server.host+":3000" });
+        if (r.__error && !r.mock) { toast("Couldn't save server: " + (r.message||("HTTP "+r.status)), "warn", true); return; }
+      }
+      W.server.saved = true;
+    } else {
+      if (!W.server.name) { toast("Pick a server", "warn", true); return; }
+      W.server.saved = true;
+    }
+    // resolve Dokploy presence
+    if (W.server.has_dokploy === "dunno" && live) {
+      toast("Checking the server for Dokploy…", "refresh");
+      const d = await post("/api/onboarding/detect-dokploy", { server:W.server.name });
+      W.dokploy.installed = d.__error ? false : !!d.installed;
+    } else {
+      W.dokploy.installed = W.server.has_dokploy === "yes";
+    }
+    setStage("dokploy");
+  }
+
+  // ─────────────────────────── Stage 4 — dokploy ───────────────────────
+  function renderDokploy() {
+    const apiKeyAndVerify = () => {
+      const keyI = el("input", { class:"input mono", type:"password", placeholder:"Dokploy API key" });
+      return el("div", { class:"stack" },
+        el("div", { class:"callout" }, icon("lock",15), el("div", null, el("strong",null,"Connect to your Dokploy"),
+          el("div",{class:"dim-mono mt-2"}, "Open ", el("a",{href:"http://"+(W.server.host||"")+":3000",target:"_blank",style:{color:"var(--info)"}},"http://"+(W.server.host||"server")+":3000 ",icon("ext",10)), " → Settings → API, create a key, paste it here."))),
+        el("div", { class:"field" }, el("label", null, "Dokploy API key"), keyI),
+        el("div", { class:"row", style:{gap:"8px"} },
+          el("button", { class:"btn btn-primary", onclick:async()=>{
+            const key = keyI.value.trim(); if (!key) { toast("Paste the API key", "warn", true); return; }
+            if (live) {
+              const r = await post("/api/servers", { name:W.server.name, host:W.server.host, dokploy_url:"http://"+W.server.host+":3000", dokploy_api_key:key });
+              if (r.__error && !r.mock) { toast("Save failed: "+(r.message||("HTTP "+r.status)), "warn", true); return; }
+              const t = await post("/api/servers/"+encodeURIComponent(W.server.name)+"/test", {});
+              if (!t.ok && !t.mock) { toast("Saved, but couldn't reach Dokploy: "+(t.dokploy?.error||t.ssh?.error||"check the key"), "warn", true); }
+              else toast("Connected to Dokploy ✓", "check");
+            }
+            W.dokploy.api_key_set = true; setStage("where");
+          }}, "Connect", icon("chevron",14))));
+    };
+
+    let body;
+    if (W.dokploy.installed) {
+      body = el("div", { class:"stack" },
+        el("div", { class:"callout", style:{borderColor:"var(--accent-line)",background:"var(--accent-soft)"} },
+          el("span",{style:{color:"var(--accent)"}}, icon("check",16)),
+          el("div", null, el("strong",null,"Dokploy is already on this server"), el("div",{class:"dim-mono mt-2"},"Keep your existing setup, or reinstall from scratch."))),
+        el("div", { class:"row", style:{gap:"10px",flexWrap:"wrap"} },
+          el("button", { class:"btn btn-primary", onclick:()=>{ W.dokploy.choice="keep"; render(); } }, "Keep my config"),
+          el("button", { class:"btn btn-danger", onclick:async()=>{ if(!confirm("Reinstall Dokploy on "+W.server.name+"? This re-runs the installer on the live host.")) return; W.dokploy.choice="reinstall"; startInstall(); } }, "Reinstall")),
+        W.dokploy.choice === "keep" ? apiKeyAndVerify() : null);
+    } else {
+      body = el("div", { class:"stack" },
+        el("div", { class:"callout warn" }, icon("warn",16), el("div", null, el("strong",null,"No Dokploy detected here"),
+          el("div",{class:"dim-mono mt-2"},"Dokpilot can install it for you now — it runs the official installer over SSH and streams the logs."))),
+        el("div", { class:"row", style:{gap:"10px"} },
+          el("button", { class:"btn btn-primary btn-lg", onclick:()=>{ if(!confirm("Install Dokploy on "+W.server.name+"? This runs the official installer on the host.")) return; W.dokploy.choice="install"; startInstall(); } }, icon("deploy",15), "Install Dokploy")));
+    }
+    wiz.append(cardPad(body, navRow(()=>setStage("server"), W.dokploy.installed && W.dokploy.choice==="keep" ? "Continue" : null, ()=>setStage("where"), !W.dokploy.api_key_set)));
+  }
+
+  function startInstall() {
+    wiz.innerHTML = "";
+    const logPre = el("pre", { class:"log-viewer mono", "aria-live":"polite", style:{maxHeight:"340px"} });
+    wiz.append(cardPad(
+      el("div", { class:"row", style:{gap:"8px"} }, el("span",{class:"dot dot-info dot-pulse"}), el("strong",null,"Installing Dokploy on "+W.server.name+"…")),
+      logPre));
+    if (!live) { logPre.append(logLine("·","info","(demo) Dokploy install would stream here.")); setTimeout(()=>{ W.dokploy.installed=true; W.dokploy.choice="keep"; setStage("dokploy"); }, 1200); return; }
+    post("/api/onboarding/install-dokploy", { server:W.server.name }).then(r => {
+      if (r.__error && !r.mock) { logPre.append(logLine("✕","error","Couldn't start install: "+(r.message||("HTTP "+r.status)))); return; }
+      const es = new EventSource("/api/jobs/"+encodeURIComponent(r.job_id)+"/stream?t="+encodeURIComponent(window.__DOKPILOT_TOKEN__));
+      let n = 0;
+      es.addEventListener("job", (e) => {
+        try { const job = JSON.parse(e.data); const lines = job.log||[];
+          for (let i=n;i<lines.length;i++) logPre.append(logLine(lines[i].t, lines[i].kind, lines[i].text));
+          n = lines.length; logPre.scrollTop = logPre.scrollHeight;
+          if (job.status==="done") { es.close(); W.dokploy.installed=true; toast("Dokploy installed ✓","check"); setTimeout(()=>{ W.dokploy.choice="keep"; setStage("dokploy"); }, 800); }
+          if (job.status==="error") { es.close(); logPre.append(logLine("✕","error", job.error||"install failed")); }
+        } catch {}
+      });
+    });
+  }
+  const logLine = (t,kind,text) => el("div", { class:"log-line log-kind-"+(kind||"info") }, el("span",{class:"log-t"},t||"·"), el("span",{class:"log-text"},text));
+
+  // ─────────────────────────── Stage 5 — where it lives ────────────────
+  function renderWhere() {
+    const domainI = el("input", { class:"input mono", placeholder:"app.example.com", value:W.where.domain });
+    const cfI = el("input", { class:"input mono", type:"password", placeholder:"Cloudflare API token (optional)", value:W.where.cf_token });
+    domainI.oninput = ()=>W.where.domain=domainI.value.trim();
+    cfI.oninput = ()=>W.where.cf_token=cfI.value.trim();
+    const pick = (mode) => { W.where.mode = mode; render(); };
+    const opt = (mode, title, sub) => el("button", { class:"md-item" + (W.where.mode===mode?" active":""), type:"button", style:{flex:"1"}, onclick:()=>pick(mode) },
+      el("div", { class:"md-name" }, title), el("div", { class:"md-sub" }, sub));
+    wiz.append(cardPad(
+      el("div", { class:"field" }, el("label", null, "Where should people reach your app?"),
+        el("div", { class:"row", style:{gap:"10px",flexWrap:"wrap"} },
+          opt("url","Just give me a URL","We'll use the server IP or a free subdomain — zero setup."),
+          opt("domain","Use my own domain","Point a custom domain with HTTPS."))),
+      W.where.mode === "domain" ? el("div", { class:"stack" },
+        el("div", { class:"field" }, el("label", null, "Domain"), domainI),
+        el("div", { class:"field" }, el("label", null, el("span",{},"Cloudflare API token "), el("span",{class:"hint"},"(optional)")), cfI,
+          el("div", { class:"hint" }, "With a token we create the DNS record + HTTPS automatically. Without it, we'll show you the record to add yourself.")),
+      ) : el("div", { class:"callout" }, icon("globe",15), "Your app will be reachable at its server URL right after deploy. You can add a custom domain later from the Domains page."),
+      navRow(()=>setStage("dokploy"), "Continue", ()=>setStage("deploy"))));
+  }
+
+  // ─────────────────────────── Stage 6 — deploy ────────────────────────
+  function renderDeploy() {
+    const ready = el("div", { class:"card card-pad", style:{textAlign:"center"} },
+      el("p", { class:"page-lead" }, "Everything's set. Ready to launch "),
+      el("div", { class:"dim-mono mb-3" }, W.repo.normalized + " → " + W.server.name + (W.where.mode==="domain"&&W.where.domain ? " · " + W.where.domain : "")),
+      el("button", { class:"btn btn-primary btn-lg", id:"big-deploy",
+        style:{fontSize:"var(--text-xl)",padding:"16px 40px",boxShadow:"0 0 30px var(--accent-glow)"},
+        onclick:launch }, icon("deploy", 18), "Deploy"));
+    wiz.innerHTML = ""; wiz.append(ready);
+  }
+
+  async function launch() {
+    wiz.innerHTML = "";
+    const logPre = el("pre", { class:"log-viewer mono", "aria-live":"polite", style:{maxHeight:"360px"} });
+    const cursor = el("div", { class:"log-line log-cursor mono" }, el("span",{class:"log-t"},"…"), el("span",{class:"log-text"},"starting…"));
+    logPre.append(cursor);
+    wiz.append(cardPad(el("div",{class:"row",style:{gap:"8px"}}, el("span",{class:"dot dot-info dot-pulse"}), el("strong",null,"Deploying "+W.repo.normalized)), logPre));
+    const domain = W.where.mode === "domain" ? (W.where.domain || null) : null;
+    if (!live) { ["Cloning repo…","Detecting stack…","Building…","Starting container…","Live ✓"].forEach((t,i)=>setTimeout(()=>{ logPre.insertBefore(logLine(new Date().toTimeString().slice(0,8), i===4?"ok":"info", t), cursor); logPre.scrollTop=logPre.scrollHeight; if(i===4){cursor.remove();renderDone({result:{url: domain?("https://"+domain):"http://"+(W.server.host||"server")}});}}, 700*(i+1))); return; }
+    const r = await post("/api/jobs/deploy", { repo:W.repo.url.replace(/^https?:\/\//,""), server:W.server.name, branch:W.repo.default_branch||"main", domain });
+    if (r.__error && !r.mock) { cursor.querySelector(".log-text").textContent = "Couldn't start: "+(r.message||("HTTP "+r.status)); return; }
+    const es = new EventSource("/api/jobs/"+encodeURIComponent(r.id)+"/stream?t="+encodeURIComponent(window.__DOKPILOT_TOKEN__));
+    let n = 0, qaShown = false;
+    es.addEventListener("job", (e) => {
+      try { const job = JSON.parse(e.data); const lines = job.log||[];
+        for (let i=n;i<lines.length;i++) logPre.insertBefore(logLine(lines[i].t, lines[i].kind, lines[i].text), cursor);
+        n = lines.length; logPre.scrollTop = logPre.scrollHeight;
+        if (job.status==="awaiting-answers" && !qaShown) { qaShown = true; renderQA(job, ()=>{ qaShown=false; }); }
+        if (job.status==="done") { es.close(); cursor.remove(); renderDone(job); }
+        if (job.status==="error") { es.close(); cursor.remove(); logPre.insertBefore(logLine(new Date().toTimeString().slice(0,8),"error", job.error||"deploy failed"), null); }
+      } catch {}
+    });
+  }
+
+  function renderQA(job, after) {
+    const pend = (job.questions||[]).filter(q => q.required && (q.answer==null||q.answer===""));
+    if (!pend.length) return;
+    const qa = el("section", { class:"card card-pad stack mb-4" },
+      el("div", { class:"row", style:{gap:"8px"} }, el("span",{class:"dot dot-warning dot-pulse"}), el("strong",null,"A few quick questions")),
+      ...pend.map((q,idx) => el("div",{class:"field"}, el("label",null,q.label),
+        q.type==="select" ? el("select",{class:"select mono",id:"oq-"+q.id}, el("option",{value:"",selected:"true",disabled:"true"},"choose…"), ...((q.options||q.opts||[]).map(o=>el("option",{value:o},o)))) : el("input",{class:"input mono",id:"oq-"+q.id,placeholder:q.placeholder||q.ph||"",autofocus:idx===0?"true":null}),
+        q.hint?el("div",{class:"hint"},q.hint):null)),
+      el("button", { class:"btn btn-primary", onclick:async()=>{
+        for (const q of pend) { const v=document.getElementById("oq-"+q.id)?.value; if(!v){toast("Answer all fields","warn",true);return;} await window.Dok.api("/api/jobs/"+job.id+"/answer",{method:"POST",headers:{"Content-Type":"application/json","X-CSRF":window.__DOKPILOT_TOKEN__},body:JSON.stringify({questionId:q.id,answer:v})}); }
+        qa.remove(); if (after) after();
+      }}, "Submit & continue", icon("chevron",14)));
+    wiz.insertBefore(qa, wiz.firstChild);
+  }
+
+  function renderDone(job) {
+    const url = job.result?.url || (W.where.mode==="domain"&&W.where.domain ? "https://"+W.where.domain : "http://"+(W.server.host||"server"));
+    renderStepper();
+    wiz.innerHTML = "";
+    toast("Deployed — your app is live", "check");
+    wiz.append(el("section", { class:"card card-pad", style:{textAlign:"center",borderColor:"var(--accent-line)",background:"linear-gradient(180deg,var(--accent-soft),transparent)"} },
+      el("div", { style:{width:"56px",height:"56px",margin:"8px auto 16px",borderRadius:"50%",background:"var(--accent)",color:"var(--accent-on)",display:"grid",placeItems:"center",boxShadow:"0 0 28px var(--accent-glow)"} }, icon("check", 28)),
+      el("h2", { style:{fontSize:"var(--text-3xl)"} }, "Your app is live 🎉"),
+      el("p", { class:"page-lead", style:{margin:"8px auto 20px"} }, "Running with HTTPS. Push to your repo and it redeploys automatically."),
+      el("div", { class:"codeblock", style:{maxWidth:"460px",margin:"0 auto 20px"} }, icon("globe",14), el("span",{class:"grow"},url), el("button",{class:"icon-btn","data-copy":url,title:"Copy"}, icon("copy",14))),
+      el("div", { class:"row", style:{justifyContent:"center",gap:"10px"} },
+        el("a", { class:"btn btn-primary", href:url, target:"_blank" }, "Open site", icon("ext",13)),
+        el("a", { class:"btn", href:"projects.html" }, "Manage app"),
+        el("a", { class:"btn btn-ghost", href:"onboarding.html" }, "Deploy another"))));
+  }
+
+  // ── router ──
+  function render() {
+    wiz.dataset.stage = W.stage;
+    wiz.innerHTML = "";
+    ({ repo:renderRepo, scan:renderRepo, server:renderServer, dokploy:renderDokploy, where:renderWhere, deploy:renderDeploy }[W.stage] || renderRepo)();
+  }
+  renderStepper();
+  render();
+};
+</script>
+</body>
+</html>

@@ -73,6 +73,7 @@ const ICONS = {
   filter:"<polygon points='3 4 21 4 14 12 14 19 10 21 10 12 3 4'/>",
   archive:"<rect x='3' y='4' width='18' height='4' rx='1'/><path d='M5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8'/><line x1='10' y1='12' x2='14' y2='12'/>",
   bell:"<path d='M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9'/><path d='M13.7 21a2 2 0 0 1-3.4 0'/>",
+  rocket:"<path d='M5 13c-1.5 1.3-2 5-2 5s3.7-.5 5-2'/><path d='M14 4c3 0 6 3 6 6 0 4-5 8-9 10-1.5-1-3-2.5-4-4 2-4 6-9 7-12z'/><circle cx='14.5' cy='9.5' r='1.6'/>",
 };
 const icon = (name, size = 16) =>
   el("span", { class: "icon", "aria-hidden": "true",
@@ -172,6 +173,7 @@ const DATA = window.DOKPILOT_DATA = {
 /* ─── navigation model ──────────────────────────────────────────────── */
 const NAV = [
   { group:null, items:[
+    { id:"onboarding", href:"onboarding.html", icon:"rocket", adv:"First deploy", simple:"Get started" },
     { id:"overview", href:"index.html", icon:"home",     adv:"Overview",  simple:"Home" },
     { id:"projects", href:"projects.html", icon:"apps",   adv:"Projects",  simple:"My apps" },
     { id:"deploy",   href:"deploy.html", icon:"deploy",   adv:"Deploy",    simple:"Deploy", dot:true },
@@ -189,6 +191,7 @@ const NAV = [
   ]},
 ];
 const PAGE_META = {
+  onboarding:{ crumb:"dokpilot / get started", adv:"First deploy", simple:"Get started" },
   overview:{ crumb:"dokpilot", adv:"Overview", simple:"Home", lead:{adv:"Everything running across your servers, at a glance.", simple:"Welcome back. Here's what's live and what needs you."} },
   projects:{ crumb:"dokpilot / projects", adv:"Projects", simple:"My apps" },
   deploy:{ crumb:"dokpilot / deploy", adv:"Deploy", simple:"Deploy something" },

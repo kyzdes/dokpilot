@@ -113,6 +113,11 @@
 <script>
 window.pageInit = ({ el, icon, badge, DATA, go }) => {
   document.querySelectorAll('[data-ic="deploy"]').forEach(n => n.replaceWith(icon("deploy", 15)));
+  // First-run routing: with no servers yet, the hero CTA should start the
+  // guided onboarding instead of the bare deploy form.
+  if (window.Dok?.live && (!DATA.servers || DATA.servers.length === 0)) {
+    document.querySelectorAll('a[href="deploy.html"]').forEach(a => a.setAttribute("href", "onboarding.html"));
+  }
   const apps = Object.values(DATA.apps);
   const live = apps.filter(a => a.status === "running").length;
   const building = apps.filter(a => a.status === "building").length;
