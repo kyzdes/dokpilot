@@ -74,6 +74,7 @@ const router = buildRouter([
   require("./routes/docker"),
   require("./routes/backups"),
   require("./routes/notifications"),
+  require("./routes/onboarding"),
   require("./routes/domains"),
   require("./routes/databases"),
   require("./routes/secrets"),
