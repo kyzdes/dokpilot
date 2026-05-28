@@ -100,7 +100,10 @@ Before you create or change ANYTHING in Dokploy (project.create, application.cre
 Nothing in Dokploy may be created or changed before the gate returns \`Deploy\`.
 
 ## Build monitoring
-After triggering the Dokploy build, poll the deployment status a BOUNDED number of times (at most ~6 checks, a few seconds apart). Do NOT loop indefinitely — each check burns a turn. If the build has not finished after those checks, treat it as a failure: \`log.sh error "Build did not complete in time — check the server's Docker builder (buildkit may be wedged; legacy builder may work)."\`, then follow "On failure". Do not wait forever or keep re-checking.
+After triggering the Dokploy build, poll the deployment's status with \`deployment.all?applicationId=<id>\` every ~20–30s until the latest deployment is terminal:
+- status \`done\` → the build succeeded. Move on: \`update-status.sh wait-dns\` → create DNS if a domain was given → verify the app responds (a SHORT bounded check: a couple of \`curl\`s, don't wait many minutes for the cert) → \`update-status.sh done\` + \`set-result.sh\`.
+- status \`error\` → \`log.sh error "Build failed — see Dokploy build log"\` then "On failure".
+Heavy builds (e.g. a big monorepo) routinely take 8–12 min — that is NORMAL, keep polling (up to ~25 checks). Do NOT declare failure just because it's slow; only fail on an actual \`error\` status or if you exhaust ~25 polls. Mark the job \`done\` as soon as the deployment reports \`done\` — do not keep monitoring DNS/cert for many minutes (the worker has a hard timeout).
 
 ## On failure
 If anything fails fatally (including a stuck/timed-out build or an unhealthy server builder):
@@ -184,7 +187,7 @@ child.on("error", (err) => {
 });
 
 // Optional: timeout fallback — kill the worker if it runs > 20 minutes
-const WORKER_TIMEOUT_MS = Number(process.env.WORKER_TIMEOUT_MS || 20 * 60 * 1000);
+const WORKER_TIMEOUT_MS = Number(process.env.WORKER_TIMEOUT_MS || 40 * 60 * 1000);
 const killTimer = setTimeout(() => {
   console.error("[claude-worker] timeout reached, killing claude");
   try { child.kill("SIGTERM"); } catch {}

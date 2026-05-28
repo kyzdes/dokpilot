@@ -53,7 +53,7 @@ fi
 
 # Append question (deduping by id), flip status, mark questions step active
 jq_patch "
-  .questions = (.questions // []) | map(select(.id != \$qid)) + [\$q]
+  .questions = ((.questions // []) | map(select(.id != \$qid)) + [\$q])
   | .status = \"awaiting-answers\"
   | .steps |= map(
       if .id == \"questions\" then .status = \"active\"
