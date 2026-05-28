@@ -4,6 +4,47 @@ All notable changes to Dokpilot are documented in this file.
 
 ---
 
+## v4.2.0 — 2026-05-28
+
+### Added — Guided first-deploy onboarding (CJM)
+
+- **`dokpilot-ui/onboarding.html`** — staged simple-mode wizard: paste GitHub URL → scan → add/pick server (manual host/SSH-user/SSH-key-path or existing) → Dokploy (detect · keep+API-key / reinstall / guided auto-install with streamed logs) → domain-or-URL (optional Cloudflare) → big green Deploy → live log stream → "your app is live" + link. "Get started" nav entry; first-run hero routing when no servers exist.
+- **`routes/onboarding.js`** — `scan-repo` (GitHub API public/private/missing classify + stack hint, `git ls-remote` fallback), `detect-dokploy` (SSH probe), `install-dokploy` (job + `lib/install-worker.js` streaming `scripts/dokploy-install.sh` over SSH). The Dokploy API key is still minted by the user in Dokploy's own first-run UI.
+
+### Changed — Design system
+
+- Reconciled `dokpilot-ui/assets/app.css` toward keys-keeper's structure (muted status palette, `--border-strong`, `--shadow-md`, density vars) while **keeping the neon-green accent**. All status colours flow through tokens.
+
+### Added — keys-keeper integration contract
+
+- `references/keys-keeper-integration-contract.md` — spec for a future keys-keeper handshake (serve `--json` discovery, `X-Keys-Client` identity + verified registry, consent prompt, scoped reveal with verified audit). Dokpilot will store `{_keykeeper}` references, never raw values. keys-keeper side is built separately.
+
+## v4.1.0 — 2026-05-25
+
+### Added — Self-test harness
+
+- `window.__DOK_PROBE__()` page-state probe + `mcp-server/ui-server/smoke.js` boot/endpoint smoke test.
+
+### Added — Operator dashboard (Dokploy API coverage, KYZ-99…109)
+
+- **Logs** — container/build log viewer with live tail (`application/compose.readLogs`).
+- **Deploy queue** — `deployment.queueList` + kill-build / cancel / clean-queue.
+- **Overview** — home rollup from `project.homeStats`.
+- **Lifecycle** — `application.reload` + `compose.redeploy`.
+- **Rollback** — one-click rollback to a prior image (`rollback.rollback`).
+- **Docker containers** — per-server list + restart/stop/kill/remove (`docker.*`).
+- **Backups** — S3 destinations CRUD + manual backups + `backups.html` page.
+- **Domains** — update/delete/validate-DNS/generate (full CRUD over `domain.*`).
+- **Notifications** — Telegram channel add/test/delete; channel tokens sanitised out of API responses.
+
+### Added — Server management UI
+
+- Add/edit/remove servers + SSH-key registry from the dashboard (`routes/servers-manage.js`, `lib/config-write.js`); API keys → Keychain, SSH keys path-only.
+
+### Fixed
+
+- Resource meter accuracy (vmstat-based CPU), deploy history pulled from Dokploy, false "Needs attention" card on a healthy fleet.
+
 ## v4.0.0 — 2026-05-24
 
 ### Renamed
