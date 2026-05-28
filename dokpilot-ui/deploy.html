@@ -124,8 +124,8 @@ window.pageInit = ({ el, icon, badge, toast, DATA, askClaude }) => {
 
       // advanced-only config
       el("div", { class:"grid grid-2", "data-adv":"" },
-        el("div", { class:"field" }, el("label", null, "Branch"), el("input", { class:"input mono", value:"main" })),
-        el("div", { class:"field" }, el("label", null, "Custom domain (optional)"), el("input", { class:"input mono", placeholder:"notes.kyzdes.dev" }))),
+        el("div", { class:"field" }, el("label", null, "Branch"), el("input", { class:"input mono", id:"deploy-branch", value:"main" })),
+        el("div", { class:"field" }, el("label", null, "Custom domain (optional)"), el("input", { class:"input mono", id:"deploy-domain", placeholder:"notes.kyzdes.dev" }))),
       el("div", { class:"grid grid-2", "data-adv":"" },
         el("div", { class:"field" }, el("label", null, "Build command (auto-detected)"), el("input", { class:"input mono", value:"pnpm build", placeholder:"auto" })),
         el("div", { class:"field" }, el("label", null, "Port"), el("input", { class:"input mono", value:"3000" }))),
@@ -384,8 +384,8 @@ window.pageInit = ({ el, icon, badge, toast, DATA, askClaude }) => {
         body: JSON.stringify({
           repo,
           server: chosen,
-          branch: document.querySelector('[data-adv] input[value="main"]')?.value || "main",
-          domain: document.querySelector('input[placeholder="notes.kyzdes.dev"]')?.value || null,
+          branch: document.getElementById("deploy-branch")?.value || "main",
+          domain: document.getElementById("deploy-domain")?.value || null,
         }),
       });
       if (res.__error) {

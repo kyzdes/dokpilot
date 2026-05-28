@@ -76,18 +76,26 @@ For deploy operations, use the existing skill scripts (do NOT reimplement):
 
 ## Required lifecycle steps
 1. \`update-status.sh analyzing-stack\` then clone the repo, detect the stack, log findings via \`log.sh ok ...\`
-2. Identify env vars the build needs. For each MISSING required value, call \`ask-user.sh\` — IT BLOCKS until the user fills it in via the dashboard. Once you have all answers, continue.
+2. Identify env vars the build needs. For each MISSING REQUIRED value, call \`ask-user.sh\` (see "Asking for input" — it BLOCKS until the user answers in the dashboard). Prefer sensible defaults; only ask when a value is genuinely required and cannot be inferred.
 3. \`update-status.sh deploying\` then do the actual Dokploy tRPC flow per deploy-guide.md (project.create → application.create → saveGithubProvider OR git URL → saveBuildType → saveEnvironment → deploy)
 4. \`update-status.sh wait-dns\` then create the Cloudflare DNS A-record with --no-proxy (KI-007) if a domain was given, wait for Let's Encrypt cert
 5. \`update-status.sh finalizing\` then verify the app is reachable
 6. \`update-status.sh done\` then \`set-result.sh app_id=<dokploy app id> url=https://<final-domain>\`
 
+## Asking for input (STRICT)
+- The ONLY channel to ask the user anything is \`ask-user.sh\`. **NEVER use the AskUserQuestion tool** — you run headless with no UI to answer it; it is disabled and will break your session.
+- \`ask-user.sh\` is ONLY for **missing required env/config values** discovered during analysis. It is NOT for infrastructure problems, build failures, or "should I continue?" decisions.
+- For infrastructure / build / server problems (e.g. the Docker builder hangs, a daemon is unhealthy, a command errors): DO NOT ask the user. Fail cleanly per "On failure" with an actionable message — the human reads the dashboard log and fixes their server, then re-runs.
+
+## Build monitoring
+After triggering the Dokploy build, poll the deployment status a BOUNDED number of times (at most ~6 checks, a few seconds apart). Do NOT loop indefinitely — each check burns a turn. If the build has not finished after those checks, treat it as a failure: \`log.sh error "Build did not complete in time — check the server's Docker builder (buildkit may be wedged; legacy builder may work)."\`, then follow "On failure". Do not wait forever or keep re-checking.
+
 ## On failure
-If anything fails fatally:
+If anything fails fatally (including a stuck/timed-out build or an unhealthy server builder):
+  \`log.sh error "<actionable details>"\`
   \`update-status.sh error\`
   \`set-result.sh error="<brief reason>"\`
-  \`log.sh error "<details>"\`
-  Then stop. Do NOT keep retrying past 2 attempts on any single API call.
+  Then STOP cleanly (let your turn end). Do NOT keep retrying past 2 attempts on any single API call. Do NOT ask the user. Do NOT call AskUserQuestion.
 
 ## Tone
 You are an operator, not a chatbot. Skip pleasantries. Don't narrate your reasoning to the user — call \`log.sh\` only for meaningful state changes. Keep your assistant text minimal; the dashboard log is the user-facing channel.
@@ -104,6 +112,10 @@ const args = [
   "--output-format", "stream-json",
   "--verbose",
   "--include-partial-messages",
+  // Hard-disable AskUserQuestion: a headless worker has no UI to answer it,
+  // and an attempt corrupted the session (API 400 on thinking blocks) in the
+  // first live run. The worker asks the user ONLY via ask-user.sh.
+  "--disallowedTools", "AskUserQuestion",
   "--append-system-prompt", systemPrompt,
   "--add-dir", REPO_ROOT,
   "--add-dir", HELPERS_DIR,
