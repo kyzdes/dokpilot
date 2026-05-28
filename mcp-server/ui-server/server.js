@@ -55,6 +55,7 @@ const TOKEN      = arg("token") || crypto.randomBytes(16).toString("hex");
 const REPO_ROOT  = path.resolve(__dirname, "..", "..");
 const UI_ROOT    = path.resolve(arg("ui-root", path.join(REPO_ROOT, "dokpilot-ui")));
 const QUIET      = hasFlag("quiet");
+const NO_STATE   = hasFlag("no-state");   // don't write .ui-port/.ui-url/.ui-pid (smoke/CI — avoids clobbering the launcher's files)
 const COOKIE_NAME = "dokpilot_token";
 
 if (!fs.existsSync(path.join(UI_ROOT, "index.html"))) {
@@ -285,7 +286,7 @@ server.listen(PORT, "127.0.0.1", () => {
   // dir is created by launch.sh, but be defensive in case the server
   // is started directly.
   const stateDir = path.join(process.env.HOME || ".", ".claude", "skills", "dokpilot");
-  try {
+  if (!NO_STATE) try {
     fs.mkdirSync(stateDir, { recursive: true });
     const writeAtomic = (filename, content) => {
       const target = path.join(stateDir, filename);

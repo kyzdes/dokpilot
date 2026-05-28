@@ -28,7 +28,7 @@ SSH_OPTS="-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o Connect
 # Load server config from servers.json. Sets HOST, USER, SSH_KEY globals.
 _load_server_config() {
   local server_name="$1"
-  local script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  local script_dir; script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
   local config="$script_dir/../config/servers.json"
 
   if [ ! -f "$config" ]; then
