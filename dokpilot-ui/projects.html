@@ -214,7 +214,15 @@ window.pageInit = ({ el, icon, badge, toast, DATA, askClaude }) => {
             const r = await window.Dok.postAction(`/api/apps/${a.id}/stop`, { server:a.server, kind:a.kind });
             if (r.__error && !r.mock) toast("Stop failed: " + (r.message || ("HTTP "+r.status)), "warn", true);
             else toast(a.name + " stopped", "pause", true);
-          }}, icon("pause", 13), "Stop"))));
+          }}, icon("pause", 13), "Stop"),
+          // Remove — permanently delete the app from Dokploy (H3). Advanced + strong confirm.
+          el("button", { class:"btn btn-sm btn-danger", "data-adv":"", onclick:async ()=>{
+            if (!confirm("Permanently delete " + a.name + " and its Dokploy app? This cannot be undone.")) return;
+            const r = await window.Dok.postAction(`/api/apps/${a.id}/delete`, { server:a.server, kind:a.kind });
+            if (r.__error && !r.mock) { toast("Delete failed: " + (r.message || ("HTTP "+r.status)), "warn", true); return; }
+            toast(a.name + " deleted", "trash", true);
+            setTimeout(() => { location.href = "projects.html"; }, 700);
+          }}, icon("trash", 13), "Remove"))));
 
     // error callout if failed
     const errBlock = a.status === "error" ? el("section", { class:"card card-pad mb-4", style:{borderColor:"var(--danger-soft)"} },

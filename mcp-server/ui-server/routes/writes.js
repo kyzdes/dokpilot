@@ -119,6 +119,7 @@ function makeAppAction(action) {
         "kill-build":  "application.killBuild",       // KYZ-102 queue aborts
         "cancel-deploy": "application.cancelDeployment",
         "clean-queue": "application.cleanQueues",
+        "delete":      "application.delete",          // H3 (v4.3)
       },
       compose: {
         redeploy:      "compose.redeploy",            // KYZ-104 (was compose.deploy)
@@ -128,6 +129,7 @@ function makeAppAction(action) {
         "kill-build":  "compose.killBuild",
         "cancel-deploy": "compose.cancelDeployment",
         "clean-queue": "compose.cleanQueues",
+        "delete":      "compose.delete",
       },
     };
     const ep = endpoints[kind]?.[action];
@@ -195,6 +197,21 @@ async function createDatabase(req, res, ctx) {
   json(res, 201, { id: newId, engine, name, deployed: true });
 }
 
+/**
+ * POST /api/projects/:id/delete   Body: { server }
+ * Removes a Dokploy project (and its apps). H3 (v4.3) — closes the
+ * cleanup gap (previously only doable via the CLI).
+ */
+async function deleteProject(req, res, ctx, params) {
+  if (!csrf.check(req, ctx.token)) return json(res, 403, { error: "csrf" });
+  let body; try { body = await readBody(req); } catch (e) { return json(res, e.code || 400, { error: e.message }); }
+  const server = body?.server || req.query?.server;
+  if (!server) return json(res, 400, { error: "missing-server" });
+  const r = await dokploy(server, "POST", "project.remove", { projectId: params.id });
+  if (r.__error) return json(res, 502, { error: "dokploy-failed", ...r });
+  json(res, 200, { deleted: params.id, server });
+}
+
 module.exports = {
   "POST /api/domains":               createDomain,
   "POST /api/apps/:id/redeploy":     makeAppAction("redeploy"),
@@ -204,5 +221,7 @@ module.exports = {
   "POST /api/apps/:id/kill-build":   makeAppAction("kill-build"),      // KYZ-102
   "POST /api/apps/:id/cancel-deploy":makeAppAction("cancel-deploy"),   // KYZ-102
   "POST /api/apps/:id/clean-queue":  makeAppAction("clean-queue"),     // KYZ-102
+  "POST /api/apps/:id/delete":       makeAppAction("delete"),          // H3
+  "POST /api/projects/:id/delete":   deleteProject,                    // H3
   "POST /api/databases":             createDatabase,
 };
