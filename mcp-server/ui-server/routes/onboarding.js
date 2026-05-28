@@ -85,7 +85,9 @@ async function scanRepo(req, res, ctx) {
   // 403 (rate limit) or network → fall back to an unauthenticated git probe.
   const g = await run("git", ["ls-remote", "--heads", `https://github.com/${gh.owner}/${gh.repo}`], { timeout: 8000, env: { GIT_TERMINAL_PROMPT: "0" } });
   if (g.code === 0) {
-    return json(res, 200, { ok: true, visibility: "public", owner: gh.owner, repo: gh.repo, normalized, stack_hint: null, default_branch: "main", note: "verified via git (GitHub API unavailable)" });
+    // KI-015: don't guess a branch on the git-fallback path — the worker
+    // detects the real default branch from the clone (excalidraw is `master`).
+    return json(res, 200, { ok: true, visibility: "public", owner: gh.owner, repo: gh.repo, normalized, stack_hint: null, default_branch: null, note: "verified via git (GitHub API unavailable)" });
   }
   return json(res, 200, { ok: false, visibility: "private-or-missing", owner: gh.owner, repo: gh.repo, normalized,
     reason: "Couldn't read this repo without credentials — it's private or doesn't exist. Private repos deploy fine using your GitHub access on the server." });

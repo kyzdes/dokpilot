@@ -594,40 +594,10 @@ async function bootData() {
         s.apps = apps.apps.filter((a) => a.server === s.id).map((a) => a.id);
       }
     }
-
-    // Back-compat aliases for OD-generated pages that hard-coded MOCK ids
-    // (e.g. index.html references DATA.apps.app_005 for the broken-card).
-    // Point each legacy key at a sensible real app so existing pageInit
-    // scripts render without crashing. When all five are missing, leave
-    // undefined and let pages defensively guard (we keep this minimal).
-    const all = Object.values(DATA.apps);
-    const byStatus = (s) => all.find(a => a.status === s);
-    const aliases = {
-      app_001: all[0],
-      app_002: all[1] || all[0],
-      app_003: byStatus("building") || all[2] || all[0],
-      app_004: all[3] || all[0],
-      app_005: byStatus("error") || byStatus("stopped") || all[4] || all[0],
-    };
-    for (const [k, v] of Object.entries(aliases)) {
-      if (v && !DATA.apps[k]) DATA.apps[k] = v;
-    }
-
-    // Same for the synthetic "needs attention" app — the broken card on
-    // index.html crashes if there's literally no error/stopped app. Inject
-    // a soft placeholder so the card renders an empty-state instead.
-    if (!DATA.apps.app_005) {
-      DATA.apps.app_005 = {
-        id: "_none", name: "(no apps in error state)",
-        server: "—", stack: "—", status: "running", last: "—",
-        env: [], db: null, autodeploy: false,
-        error: null,
-      };
-    } else if (!DATA.apps.app_005.error) {
-      // Synthesize a friendly message for non-error apps shown as "broken"
-      DATA.apps.app_005.error = DATA.apps.app_005.error
-        || "Last deploy needs attention. Open the app to see why.";
-    }
+    // (v4.3 H5) Removed the legacy app_001..app_005 MOCK-id alias hack: pages
+    // now read live data directly (projects iterates server app-ids; index's
+    // "needs attention" filters real error/stopped apps), so the aliases were
+    // dead weight.
   }
 
   Object.assign(window.Dok || (window.Dok = {}), { api, live: true });
