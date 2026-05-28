@@ -162,6 +162,7 @@ $ARGUMENTS = "deploy github.com/user/app --domain app.example.com"
 | `logs` | View application/build logs (see below) |
 | `destroy` | Delete project (see below) |
 | `config` | Configuration management (see below) |
+| `ui` | Launch local web dashboard (see `ui` section) |
 | (empty) | Show help |
 
 ---
@@ -407,6 +408,49 @@ Key improvements in v3.1:
 - The deploy report should mention: "Auto-deploy is active via GitHub App. Push to `<branch>` to trigger redeploy."
 - If user asks to redeploy, use `application.redeploy` API endpoint
 
+**`/dokpilot deploy --job <id>`** — worker mode (v4.0+).
+
+When invoked with `--job`, you are a backgrounded deploy worker driven by the dashboard's job queue. The job spec is at `$JOB_PATH` (env var). Use the helpers under `$HELPERS_DIR` (also env):
+
+- `update-status.sh <state>` — lifecycle transitions
+- `log.sh <kind> "<message>"` — append a log line
+- `ask-user.sh <id> "<label>" <type> "<extra>" "<hint>"` — blocking question
+- `set-result.sh key=value ...` — final result
+
+The full worker prompt + helper protocol is in `mcp-server/ui-server/lib/claude-worker.js`. The dashboard's `POST /api/jobs/deploy` already spawns this flow automatically — manual `/dokpilot deploy --job <id>` is only for restarting or debugging a stuck job.
+
+### `/dokpilot ui` — Launch local web dashboard
+
+Launches the Dokpilot UI server (`mcp-server/ui-server/server.js`) on a random ephemeral 127.0.0.1 port with a per-session bearer token, then opens the dashboard in the default browser.
+
+**Run:**
+
+```bash
+bash "$REPO/mcp-server/ui-server/launch.sh"
+```
+
+(where `$REPO` is the repo root — resolve via the install-path rules in **5. Determining skill path**, then walk one level up since the skill lives at `<repo>/skills/dokpilot/`.)
+
+**Subcommands:**
+
+| Form | Effect |
+|:-----|:-------|
+| `/dokpilot ui` | Start (or print URL if already running) and `open` the dashboard. |
+| `/dokpilot ui --stop` | Kill the running server (if any). |
+| `/dokpilot ui --status` | Print pid / port / URL if alive. |
+| `/dokpilot ui --no-open` | Start but don't `open` the URL (CI use). |
+
+**State files** (under `~/.claude/skills/dokpilot/`, mode 0600):
+
+- `.ui-pid` — pid of the running ui-server
+- `.ui-port` — the ephemeral port picked at launch
+- `.ui-url` — full URL including the bearer token
+- `ui-server.log` — server stderr
+
+**What it serves:** the static `dokpilot-ui/` (sibling to `mcp-server/`) — multi-page web dashboard for projects / servers / domains / databases / deploys / logs / Claude console. Currently shipped milestone is **M0** (foundation): static serve + auth + `/api/health` only. Real API endpoints (`/api/servers`, `/api/apps`, deploy job-runner, log SSE streams) land in subsequent milestones — the UI is on MOCK_DATA until each milestone wires the backend.
+
+**Security:** 127.0.0.1 bind only, random port per launch, 32-byte bearer token rotated each start, strict Origin/Referer check, HttpOnly SameSite=Strict cookie after first GET. The dashboard refuses direct visits without a launch-issued token. **Never expose remotely** (no tunnels, no port-forwards).
+
 ---
 
 ## Help (when $ARGUMENTS is empty)
@@ -430,6 +474,8 @@ Commands:
   /dokpilot config                             Show configuration
   /dokpilot config server add <name> <ip>      Add server
   /dokpilot config cloudflare <token>          Configure CloudFlare API
+  /dokpilot ui                                 Open local web dashboard
+  /dokpilot ui --stop                          Stop the dashboard server
 
 Examples:
 
