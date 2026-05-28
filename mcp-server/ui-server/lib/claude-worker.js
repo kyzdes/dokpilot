@@ -77,7 +77,7 @@ For deploy operations, use the existing skill scripts (do NOT reimplement):
 ## Required lifecycle steps
 1. \`update-status.sh analyzing-stack\` then clone the repo, detect the stack, log findings via \`log.sh ok ...\`
 2. Identify env vars the build needs. For each MISSING REQUIRED value, call \`ask-user.sh\` (see "Asking for input" — it BLOCKS until the user answers in the dashboard). Prefer sensible defaults; only ask when a value is genuinely required and cannot be inferred.
-3. \`update-status.sh deploying\` then do the actual Dokploy tRPC flow per deploy-guide.md (project.create → application.create → saveGithubProvider OR git URL → saveBuildType → saveEnvironment → deploy)
+3. **Run the "Plan & confirm" gate below — get \`Deploy\` first.** ONLY then: \`update-status.sh deploying\` and do the actual Dokploy tRPC flow per deploy-guide.md (project.create → application.create → saveGithubProvider OR git URL → saveBuildType → saveEnvironment → deploy)
 4. \`update-status.sh wait-dns\` then create the Cloudflare DNS A-record with --no-proxy (KI-007) if a domain was given, wait for Let's Encrypt cert
 5. \`update-status.sh finalizing\` then verify the app is reachable
 6. \`update-status.sh done\` then \`set-result.sh app_id=<dokploy app id> url=https://<final-domain>\`
@@ -86,6 +86,18 @@ For deploy operations, use the existing skill scripts (do NOT reimplement):
 - The ONLY channel to ask the user anything is \`ask-user.sh\`. **NEVER use the AskUserQuestion tool** — you run headless with no UI to answer it; it is disabled and will break your session.
 - \`ask-user.sh\` is ONLY for **missing required env/config values** discovered during analysis. It is NOT for infrastructure problems, build failures, or "should I continue?" decisions.
 - For infrastructure / build / server problems (e.g. the Docker builder hangs, a daemon is unhealthy, a command errors): DO NOT ask the user. Fail cleanly per "On failure" with an actionable message — the human reads the dashboard log and fixes their server, then re-runs.
+
+## Plan & confirm (MANDATORY — before ANY mutating call)
+Before you create or change ANYTHING in Dokploy (project.create, application.create, saveBuildType, saveEnvironment, deploy, domain.create, DNS, etc.) you MUST present a plan and get explicit confirmation. This gate is ALWAYS on — never skip it.
+1. After detecting the stack and gathering any required env, emit the plan as \`log.sh info\` lines:
+   - repo + branch; detected stack + build type + port
+   - env keys you will set (NAMES only — never values)
+   - domain / DNS change (or "free traefik.me hostname over HTTP")
+   - Dokploy resources to be created (project, application)
+2. Then ask for confirmation (this BLOCKS until the user clicks in the dashboard):
+   \`bash "$HELPERS_DIR/ask-user.sh" confirm_deploy "Deploy this plan?" select "Deploy,Cancel" "Nothing is created until you confirm"\`
+3. If the answer is exactly \`Deploy\` → proceed to mutate (step 3 of the lifecycle). For ANY other answer (e.g. \`Cancel\`) → \`log.sh warn "Deploy cancelled by user"\`, \`update-status.sh error\`, \`set-result.sh error="cancelled by user"\`, then STOP — create NOTHING.
+Nothing in Dokploy may be created or changed before the gate returns \`Deploy\`.
 
 ## Build monitoring
 After triggering the Dokploy build, poll the deployment status a BOUNDED number of times (at most ~6 checks, a few seconds apart). Do NOT loop indefinitely — each check burns a turn. If the build has not finished after those checks, treat it as a failure: \`log.sh error "Build did not complete in time — check the server's Docker builder (buildkit may be wedged; legacy builder may work)."\`, then follow "On failure". Do not wait forever or keep re-checking.
