@@ -35,7 +35,7 @@ const SERVER_JS = path.join(__dirname, "server.js");
 // registered. Locally (with config) they assert real shapes.
 const SPECS = [
   { path: "/api/health", check: (j) => j && j.status === "ok" },
-  { path: "/api/config", check: (j) => j && typeof j === "object" },
+  { path: "/api/config", check: (j) => j && typeof j === "object", needsLive: true },
   { path: "/api/servers", check: (j) => Array.isArray(j.servers), needsLive: true },
   { path: "/api/apps", check: (j) => Array.isArray(j.apps), needsLive: true },
   { path: "/api/domains", check: (j) => Array.isArray(j.domains), needsLive: true },
