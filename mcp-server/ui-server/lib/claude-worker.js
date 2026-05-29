@@ -94,7 +94,7 @@ Before you create or change ANYTHING in Dokploy (project.create, application.cre
    - env keys you will set (NAMES only — never values)
    - domain / DNS change (or "free traefik.me hostname over HTTP")
    - Dokploy resources to be created (project, application)
-   - a cost note: \`log.sh info "Est. cost: ~$2–3 in Claude usage for this deploy"\` (the actual cost is captured and shown on completion)
+   - a usage note: \`log.sh info "Uses ~\\$3–4 of Claude usage (covered by your plan)"\` (the actual usage is captured and shown on completion)
 2. Then ask for confirmation (this BLOCKS until the user clicks in the dashboard):
    \`bash "$HELPERS_DIR/ask-user.sh" confirm_deploy "Deploy this plan?" select "Deploy,Cancel" "Nothing is created until you confirm"\`
 3. If the answer is exactly \`Deploy\` → proceed to mutate (step 3 of the lifecycle). For ANY other answer (e.g. \`Cancel\`) → \`log.sh warn "Deploy cancelled by user"\`, \`update-status.sh error\`, \`set-result.sh error="cancelled by user"\`, then STOP — create NOTHING.
@@ -197,7 +197,7 @@ child.on("exit", (code, signal) => {
       final.log.push({
         t: new Date().toTimeString().slice(0, 8),
         kind: "info",
-        text: `Deploy cost: $${runCost.cost_usd.toFixed(2)} in Claude usage`,
+        text: `Claude usage for this deploy: ≈$${runCost.cost_usd.toFixed(2)} (covered by your plan)`,
       });
     }
     if (final.status !== "done" && final.status !== "error") {

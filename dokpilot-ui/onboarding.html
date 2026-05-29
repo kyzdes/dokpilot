@@ -334,7 +334,7 @@ window.pageInit = ({ el, icon, badge, toast, DATA }) => {
       el("h2", { style:{fontSize:"var(--text-3xl)"} }, "Your app is live 🎉"),
       el("p", { class:"page-lead", style:{margin:"8px auto 20px"} }, "Running with HTTPS. Push to your repo and it redeploys automatically."),
       el("div", { class:"codeblock", style:{maxWidth:"460px",margin:"0 auto 20px"} }, icon("globe",14), el("span",{class:"grow"},url), el("button",{class:"icon-btn","data-copy":url,title:"Copy"}, icon("copy",14))),
-      job.cost_usd != null ? el("p", { class:"hint", style:{margin:"-10px auto 18px"} }, "Cost: $" + Number(job.cost_usd).toFixed(2) + " in Claude usage") : null,
+      job.cost_usd != null ? el("p", { class:"hint", style:{margin:"-10px auto 18px"} }, "≈$" + Number(job.cost_usd).toFixed(2) + " Claude usage (on your plan)") : null,
       el("div", { class:"row", style:{justifyContent:"center",gap:"10px"} },
         el("a", { class:"btn btn-primary", href:url, target:"_blank" }, "Open site", icon("ext",13)),
         el("a", { class:"btn", href:"projects.html" }, "Manage app"),
