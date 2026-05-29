@@ -131,6 +131,12 @@ const args = [
   // and an attempt corrupted the session (API 400 on thinking blocks) in the
   // first live run. The worker asks the user ONLY via ask-user.sh.
   "--disallowedTools", "AskUserQuestion",
+  // Run in bypassPermissions: a headless background worker can't answer the
+  // interactive auto-mode permission classifier, and a transient classifier
+  // denial stalled the worker to its timeout (KI-019). The H1 plan-then-confirm
+  // gate is the real safety boundary (the user approves the plan before any
+  // Dokploy mutation) — per-tool classifier gating only adds flaky failures.
+  "--permission-mode", "bypassPermissions",
   "--append-system-prompt", systemPrompt,
   "--add-dir", REPO_ROOT,
   "--add-dir", HELPERS_DIR,
