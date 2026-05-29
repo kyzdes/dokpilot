@@ -817,8 +817,9 @@ APP=$(bash scripts/dokploy-api.sh main POST application.create '{
 APP_ID=$(echo "$APP" | jq -r '.applicationId')
 
 # 6. Configure GitHub (via the GitHub App — if installed)
+# v0.29+ (shared providers, KI-012/G-016): id nested at .github.githubId; top-level null.
 GITHUB_ID=$(bash scripts/dokploy-api.sh main GET "gitProvider.getAll" | \
-  jq -r '[.[] | select(.providerType == "github")][0].githubId // empty')
+  jq -r '[.[] | select(.providerType == "github")][0] | (.github.githubId // .githubId) // empty')
 
 if [ -n "$GITHUB_ID" ]; then
   bash scripts/dokploy-api.sh main POST application.saveGithubProvider '{

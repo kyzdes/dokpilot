@@ -410,7 +410,9 @@ REPO=$(echo "$GITHUB_URL" | sed -E 's|.*github\.com/[^/]+/([^/.]+).*|\1|')
 ```bash
 # Проверить установлен ли GitHub App
 PROVIDERS=$(bash scripts/dokploy-api.sh "$SERVER" GET "gitProvider.getAll")
-GITHUB_ID=$(echo "$PROVIDERS" | jq -r '[.[] | select(.providerType == "github")][0].githubId // empty')
+# v0.29+ (shared providers, KI-012/G-016): id is nested at .github.githubId
+# (top-level .githubId is null). Read nested first, fall back to top-level.
+GITHUB_ID=$(echo "$PROVIDERS" | jq -r '[.[] | select(.providerType == "github")][0] | (.github.githubId // .githubId) // empty')
 ```
 
 #### Path A: GitHub App доступен (GITHUB_ID не пустой)

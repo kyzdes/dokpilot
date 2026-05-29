@@ -27,9 +27,11 @@ After this, when creating applications in Dokploy, you can select repositories f
 **API integration:** Use `POST application.saveGithubProvider` with `owner`, `repository`, `branch`, and `githubId` (from `gitProvider.getAll`).
 
 ```bash
-# First, get the GitHub provider ID
+# First, get the GitHub provider ID.
+# Dokploy v0.29+ (shared providers, KI-012/G-016): the real id is nested at
+# .github.githubId; top-level .githubId is null → read nested first, then fall back.
 GITHUB_ID=$(bash scripts/dokploy-api.sh <server> GET "gitProvider.getAll" | \
-  jq -r '[.[] | select(.providerType == "github")][0].githubId')
+  jq -r '[.[] | select(.providerType == "github")][0] | (.github.githubId // .githubId) // empty')
 
 # Then configure the application
 bash scripts/dokploy-api.sh <server> POST application.saveGithubProvider '{
