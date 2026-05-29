@@ -143,6 +143,16 @@ function streamJob(req, res, ctx, params) {
   const p = jobPath(id);
   const stream = openStream(res);
 
+  // Hold the stream open past a terminal status long enough for the worker's
+  // trailing `cost_usd` write (it lands a beat after the worker marks done,
+  // on the claude process exit). Reschedulable so we close ~quickly once cost
+  // is present, but never hang longer than the grace cap.
+  let closeTimer = null;
+  const scheduleClose = (reason, delay) => {
+    clearTimeout(closeTimer);
+    closeTimer = setTimeout(() => stream.close(reason), delay);
+  };
+
   const emit = () => {
     const j = readJob(id);
     if (!j) {
@@ -152,10 +162,9 @@ function streamJob(req, res, ctx, params) {
     }
     stream.send("job", j);
     if (j.status === "done" || j.status === "error") {
-      // Give the client a moment to render the final state before
-      // closing — but they can also keep the stream open to display
-      // post-deploy events.
-      setTimeout(() => stream.close("terminal"), 500);
+      // cost present → close promptly; not yet → wait up to 8s for the
+      // trailing write (fs.watch re-emits with cost in between).
+      scheduleClose("terminal", j.cost_usd != null ? 400 : 8000);
     }
   };
 
@@ -181,6 +190,7 @@ function streamJob(req, res, ctx, params) {
   stream.onClose(() => {
     clearInterval(ping);
     clearTimeout(pending);
+    clearTimeout(closeTimer);
     try { watcher && watcher.close(); } catch {}
   });
 }

@@ -279,6 +279,7 @@ window.pageInit = ({ el, icon, badge, toast, DATA, askClaude }) => {
     // IDs so we don't blow away in-progress user input on re-render
     let qaCard = null;
     let renderedLogLen = 0;
+    let terminalToasted = false; // guard double-toast across onDone + onCost re-render
 
     function syncLog(job) {
       // Append only new lines
@@ -349,12 +350,13 @@ window.pageInit = ({ el, icon, badge, toast, DATA, askClaude }) => {
     }
 
     function renderDone(job) {
-      if (liveES) { liveES.close(); liveES = null; }
+      // NB: don't close liveES here — the stream stays open briefly so the
+      // worker's trailing cost_usd lands (onCost re-renders this card).
       const url = job.result?.url || ("https://" + (job.domain || repo.split("/").pop() + ".kyzdes.dev"));
       wrap.innerHTML = "";
       const simple = document.documentElement.dataset.mode === "simple";
       renderStepper(simple ? 2 : 4, simple ? 3 : 5);
-      toast("Deployed — " + url.replace(/^https?:\/\//,"") + " is live", "check");
+      if (!terminalToasted) { terminalToasted = true; toast("Deployed — " + url.replace(/^https?:\/\//,"") + " is live", "check"); }
       wrap.append(el("section", { class:"card card-pad", style:{textAlign:"center",borderColor:"var(--accent-line)",background:"linear-gradient(180deg,var(--accent-soft),transparent)"} },
         el("div", { style:{width:"52px",height:"52px",margin:"8px auto 16px",borderRadius:"50%",background:"var(--accent)",color:"var(--accent-on)",display:"grid",placeItems:"center",boxShadow:"0 0 24px var(--accent-glow)"} }, icon("check", 26)),
         el("h2", { style:{fontSize:"var(--text-3xl)"} }, el("span",{ "data-adv":"" },"Deploy complete"), el("span",{ "data-simple":"" },"Your app is live")),
@@ -372,10 +374,12 @@ window.pageInit = ({ el, icon, badge, toast, DATA, askClaude }) => {
     }
 
     function renderError(job) {
-      if (liveES) { liveES.close(); liveES = null; }
+      // Don't close liveES — keep the stream open for the trailing cost_usd.
       cursor.remove();
+      // Idempotent: onCost re-renders this; drop any prior banner first.
+      wrap.querySelector(".deploy-err-banner")?.remove();
       const cancelled = /cancel/i.test(job.error || "") || /cancel/i.test(job.result?.error || "");
-      const errBanner = el("section", { class:"callout warn mb-4" },
+      const errBanner = el("section", { class:"callout warn mb-4 deploy-err-banner" },
         icon("warn", 15),
         el("div", { class:"grow" },
           el("strong", null, cancelled ? "Deploy cancelled. " : "Deploy failed: "),
@@ -411,6 +415,8 @@ window.pageInit = ({ el, icon, badge, toast, DATA, askClaude }) => {
         onJob: (job) => { syncLog(job); syncStepper(job); syncQA(job); },
         onDone: (job) => renderDone(job),
         onError: (job) => renderError(job),
+        // Trailing cost_usd arrives after terminal — re-render the right card.
+        onCost: (job) => (job.status === "done" ? renderDone(job) : renderError(job)),
         onNotFound: () => { cursor.querySelector(".log-text").textContent = "Job vanished from queue."; },
       });
     } catch (err) {

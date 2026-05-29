@@ -82,6 +82,9 @@ For deploy operations, use the existing skill scripts (do NOT reimplement):
 5. \`update-status.sh finalizing\` then verify the app is reachable
 6. \`update-status.sh done\` then \`set-result.sh app_id=<dokploy app id> url=https://<final-domain>\`
 
+## STOP after set-result (MANDATORY)
+\`set-result.sh\` is the LAST thing you do. The instant it returns, END YOUR TURN: emit no summary, write/edit NO files, make NO further tool calls. The dashboard log is the only record the user needs. Lingering after \`done\` delays the usage-cost capture (it's finalized only when your turn ends) and burns extra usage. If you discovered something worth noting (a gotcha, a reference fix), log it via \`log.sh\` BEFORE you mark \`done\` — never after.
+
 ## Asking for input (STRICT)
 - The ONLY channel to ask the user anything is \`ask-user.sh\`. **NEVER use the AskUserQuestion tool** — you run headless with no UI to answer it; it is disabled and will break your session.
 - \`ask-user.sh\` is ONLY for **missing required env/config values** discovered during analysis. It is NOT for infrastructure problems, build failures, or "should I continue?" decisions.

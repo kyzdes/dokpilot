@@ -306,6 +306,8 @@ window.pageInit = ({ el, icon, badge, toast, DATA }) => {
       },
       onDone: (job) => { clearInterval(timer); cursor.remove(); renderDone(job); },
       onError: (job) => { clearInterval(timer); cursor.remove(); logPre.append(logLine(new Date().toTimeString().slice(0,8),"error", job.error||"deploy failed")); },
+      // Trailing cost_usd lands after 'done' — re-render the finale with it.
+      onCost: (job) => { if (job.status==="done") renderDone(job); },
     });
   }
 
@@ -328,7 +330,7 @@ window.pageInit = ({ el, icon, badge, toast, DATA }) => {
     const url = job.result?.url || (W.where.mode==="domain"&&W.where.domain ? "https://"+W.where.domain : "http://"+(W.server.host||"server"));
     renderStepper();
     wiz.innerHTML = "";
-    toast("Deployed — your app is live", "check");
+    if (!W._doneToasted) { W._doneToasted = true; toast("Deployed — your app is live", "check"); }
     wiz.append(el("section", { class:"card card-pad", style:{textAlign:"center",borderColor:"var(--accent-line)",background:"linear-gradient(180deg,var(--accent-soft),transparent)"} },
       el("div", { style:{width:"56px",height:"56px",margin:"8px auto 16px",borderRadius:"50%",background:"var(--accent)",color:"var(--accent-on)",display:"grid",placeItems:"center",boxShadow:"0 0 28px var(--accent-glow)"} }, icon("check", 28)),
       el("h2", { style:{fontSize:"var(--text-3xl)"} }, "Your app is live 🎉"),
