@@ -72,6 +72,7 @@
 </div>
 
 <script src="assets/app.js"></script>
+<script src="assets/deploy-flow.js"></script>
 <script>
 window.pageInit = ({ el, icon, badge, toast, DATA, askClaude }) => {
   const wrap = document.getElementById("wizard");
@@ -327,19 +328,15 @@ window.pageInit = ({ el, icon, badge, toast, DATA, askClaude }) => {
     }
 
     async function submitAnswers(job) {
-      const csrfToken = window.__DOKPILOT_TOKEN__;
+      const answers = [];
       for (const q of job.questions) {
         if (q.answer != null && q.answer !== "") continue;
         const inputEl = document.getElementById("qa-" + q.id);
         if (!inputEl) continue;
-        const answer = inputEl.value;
-        if (!answer) { toast("Please answer all required fields", "warn"); return; }
-        await window.Dok.api(`/api/jobs/${job.id}/answer`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json", "X-CSRF": csrfToken },
-          body: JSON.stringify({ questionId: q.id, answer }),
-        });
+        if (!inputEl.value) { toast("Please answer all required fields", "warn"); return; }
+        answers.push({ questionId: q.id, answer: inputEl.value });
       }
+      await window.DokFlow.postAnswers(job.id, window.__DOKPILOT_TOKEN__, answers);
       // Clear and let the SSE re-render (qaCard will be removed when status flips)
       if (qaCard) { qaCard.remove(); qaCard = null; }
     }
@@ -394,22 +391,14 @@ window.pageInit = ({ el, icon, badge, toast, DATA, askClaude }) => {
       }
       headerJobIdSpan.textContent = "job " + res.id;
 
-      // Subscribe to job stream — bearer token via ?t= because
-      // EventSource doesn't support custom headers
-      const streamUrl = `/api/jobs/${encodeURIComponent(res.id)}/stream?t=${encodeURIComponent(csrfToken)}`;
-      liveES = new EventSource(streamUrl);
-      liveES.addEventListener("job", (e) => {
-        try {
-          const job = JSON.parse(e.data);
-          syncLog(job);
-          syncStepper(job);
-          syncQA(job);
-          if (job.status === "done") renderDone(job);
-          if (job.status === "error") renderError(job);
-        } catch {}
+      // Subscribe via the shared deploy-flow module (SSE + log-index diffing
+      // + terminal routing). Page keeps its own syncLog/syncStepper/syncQA.
+      liveES = window.DokFlow.subscribeJob(res.id, csrfToken, {
+        onJob: (job) => { syncLog(job); syncStepper(job); syncQA(job); },
+        onDone: (job) => renderDone(job),
+        onError: (job) => renderError(job),
+        onNotFound: () => { cursor.querySelector(".log-text").textContent = "Job vanished from queue."; },
       });
-      liveES.addEventListener("not-found", () => { cursor.querySelector(".log-text").textContent = "Job vanished from queue."; liveES.close(); });
-      liveES.addEventListener("error", () => { /* EventSource auto-reconnects */ });
     } catch (err) {
       cursor.querySelector(".log-text").textContent = "Connection failed: " + err.message;
     }

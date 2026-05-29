@@ -33,6 +33,7 @@
 </div>
 
 <script src="assets/app.js"></script>
+<script src="assets/deploy-flow.js"></script>
 <script>
 window.pageInit = ({ el, icon, badge, toast, DATA }) => {
   const wiz = document.getElementById("wiz");
@@ -241,19 +242,14 @@ window.pageInit = ({ el, icon, badge, toast, DATA }) => {
     if (!live) { logPre.append(logLine("·","info","(demo) Dokploy install would stream here.")); setTimeout(()=>{ W.dokploy.installed=true; W.dokploy.choice="keep"; setStage("dokploy"); }, 1200); return; }
     post("/api/onboarding/install-dokploy", { server:W.server.name }).then(r => {
       if (r.__error && !r.mock) { logPre.append(logLine("✕","error","Couldn't start install: "+(r.message||("HTTP "+r.status)))); return; }
-      const es = new EventSource("/api/jobs/"+encodeURIComponent(r.job_id)+"/stream?t="+encodeURIComponent(window.__DOKPILOT_TOKEN__));
-      let n = 0;
-      es.addEventListener("job", (e) => {
-        try { const job = JSON.parse(e.data); const lines = job.log||[];
-          for (let i=n;i<lines.length;i++) logPre.append(logLine(lines[i].t, lines[i].kind, lines[i].text));
-          n = lines.length; logPre.scrollTop = logPre.scrollHeight;
-          if (job.status==="done") { es.close(); W.dokploy.installed=true; toast("Dokploy installed ✓","check"); setTimeout(()=>{ W.dokploy.choice="keep"; setStage("dokploy"); }, 800); }
-          if (job.status==="error") { es.close(); logPre.append(logLine("✕","error", job.error||"install failed")); }
-        } catch {}
+      window.DokFlow.subscribeJob(r.job_id, window.__DOKPILOT_TOKEN__, {
+        onJob: (job, newLines) => { newLines.forEach(l => logPre.append(logLine(l.t,l.kind,l.text))); logPre.scrollTop = logPre.scrollHeight; },
+        onDone: () => { W.dokploy.installed=true; toast("Dokploy installed ✓","check"); setTimeout(()=>{ W.dokploy.choice="keep"; setStage("dokploy"); }, 800); },
+        onError: (job) => { logPre.append(logLine("✕","error", job.error||"install failed")); },
       });
     });
   }
-  const logLine = (t,kind,text) => el("div", { class:"log-line log-kind-"+(kind||"info") }, el("span",{class:"log-t"},t||"·"), el("span",{class:"log-text"},text));
+  const logLine = window.DokFlow.logLine;   // shared (deploy-flow.js)
 
   // ─────────────────────────── Stage 5 — where it lives ────────────────
   function renderWhere() {
@@ -301,16 +297,15 @@ window.pageInit = ({ el, icon, badge, toast, DATA }) => {
     if (!live) { ["Cloning repo…","Detecting stack…","Building…","Starting container…","Live ✓"].forEach((t,i)=>setTimeout(()=>{ logPre.insertBefore(logLine(new Date().toTimeString().slice(0,8), i===4?"ok":"info", t), cursor); logPre.scrollTop=logPre.scrollHeight; if(i===4){clearInterval(timer);cursor.remove();renderDone({result:{url: domain?("https://"+domain):"http://"+(W.server.host||"server")}});}}, 700*(i+1))); return; }
     const r = await post("/api/jobs/deploy", { repo:W.repo.url.replace(/^https?:\/\//,""), server:W.server.name, branch:W.repo.default_branch||"main", domain });
     if (r.__error && !r.mock) { clearInterval(timer); cursor.querySelector(".log-text").textContent = "Couldn't start: "+(r.message||("HTTP "+r.status)); return; }
-    const es = new EventSource("/api/jobs/"+encodeURIComponent(r.id)+"/stream?t="+encodeURIComponent(window.__DOKPILOT_TOKEN__));
-    let n = 0, qaShown = false;
-    es.addEventListener("job", (e) => {
-      try { const job = JSON.parse(e.data); const lines = job.log||[];
-        for (let i=n;i<lines.length;i++) logPre.insertBefore(logLine(lines[i].t, lines[i].kind, lines[i].text), cursor);
-        n = lines.length; logPre.scrollTop = logPre.scrollHeight;
+    let qaShown = false;
+    window.DokFlow.subscribeJob(r.id, window.__DOKPILOT_TOKEN__, {
+      onJob: (job, newLines) => {
+        newLines.forEach(l => logPre.insertBefore(logLine(l.t, l.kind, l.text), cursor));
+        logPre.scrollTop = logPre.scrollHeight;
         if (job.status==="awaiting-answers" && !qaShown) { qaShown = true; renderQA(job, ()=>{ qaShown=false; }); }
-        if (job.status==="done") { es.close(); clearInterval(timer); cursor.remove(); renderDone(job); }
-        if (job.status==="error") { es.close(); clearInterval(timer); cursor.remove(); logPre.insertBefore(logLine(new Date().toTimeString().slice(0,8),"error", job.error||"deploy failed"), null); }
-      } catch {}
+      },
+      onDone: (job) => { clearInterval(timer); cursor.remove(); renderDone(job); },
+      onError: (job) => { clearInterval(timer); cursor.remove(); logPre.append(logLine(new Date().toTimeString().slice(0,8),"error", job.error||"deploy failed")); },
     });
   }
 
