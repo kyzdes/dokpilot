@@ -94,6 +94,7 @@ Before you create or change ANYTHING in Dokploy (project.create, application.cre
    - env keys you will set (NAMES only — never values)
    - domain / DNS change (or "free traefik.me hostname over HTTP")
    - Dokploy resources to be created (project, application)
+   - a cost note: \`log.sh info "Est. cost: ~$2–3 in Claude usage for this deploy"\` (the actual cost is captured and shown on completion)
 2. Then ask for confirmation (this BLOCKS until the user clicks in the dashboard):
    \`bash "$HELPERS_DIR/ask-user.sh" confirm_deploy "Deploy this plan?" select "Deploy,Cancel" "Nothing is created until you confirm"\`
 3. If the answer is exactly \`Deploy\` → proceed to mutate (step 3 of the lifecycle). For ANY other answer (e.g. \`Cancel\`) → \`log.sh warn "Deploy cancelled by user"\`, \`update-status.sh error\`, \`set-result.sh error="cancelled by user"\`, then STOP — create NOTHING.
@@ -154,26 +155,61 @@ const child = spawn("claude", args, {
   stdio: ["ignore", "pipe", "pipe"],
 });
 
-// Mirror stream-json + stderr into the per-job claude.log for debugging
-child.stdout.on("data", (c) => claudeLogStream.write(c));
+// Mirror stream-json + stderr into the per-job claude.log for debugging.
+// While mirroring stdout, sniff the final stream-json `result` message for
+// the run's actual cost so we can surface it in the UI (cost-guard). The
+// stream is newline-delimited JSON; we buffer partial lines across chunks.
+let runCost = { cost_usd: null, duration_ms: null, num_turns: null };
+let stdoutTail = "";
+child.stdout.on("data", (c) => {
+  claudeLogStream.write(c);
+  stdoutTail += c.toString("utf8");
+  let nl;
+  while ((nl = stdoutTail.indexOf("\n")) !== -1) {
+    const line = stdoutTail.slice(0, nl);
+    stdoutTail = stdoutTail.slice(nl + 1);
+    if (line.indexOf('"type":"result"') === -1) continue;
+    try {
+      const msg = JSON.parse(line);
+      if (msg && msg.type === "result") {
+        if (typeof msg.total_cost_usd === "number") runCost.cost_usd = msg.total_cost_usd;
+        if (typeof msg.duration_ms === "number") runCost.duration_ms = msg.duration_ms;
+        if (typeof msg.num_turns === "number") runCost.num_turns = msg.num_turns;
+      }
+    } catch { /* partial/non-JSON line — ignore */ }
+  }
+});
 child.stderr.on("data", (c) => claudeLogStream.write(c));
 
 /* ─── safety net ──────────────────────────────────────────────────── */
 // If claude exits without setting a terminal state, mark error so the UI doesn't hang
 child.on("exit", (code, signal) => {
-  claudeLogStream.write(`--- worker exit code=${code} signal=${signal} ---\n`);
+  claudeLogStream.write(`--- worker exit code=${code} signal=${signal} cost=${runCost.cost_usd} ---\n`);
   claudeLogStream.end();
 
   const final = readJob(id);
-  if (final && final.status !== "done" && final.status !== "error") {
-    final.status = "error";
-    final.error = `Claude exited (code ${code}${signal ? ", signal " + signal : ""}) before reaching a terminal state. Check ${path.basename(CLAUDE_LOG)} for details.`;
-    final.log = final.log || [];
-    final.log.push({
-      t: new Date().toTimeString().slice(0, 8),
-      kind: "error",
-      text: final.error,
-    });
+  if (final) {
+    // Record the run's actual cost (cost-guard) whatever the outcome.
+    if (runCost.cost_usd != null) {
+      final.cost_usd = runCost.cost_usd;
+      final.run_stats = { duration_ms: runCost.duration_ms, num_turns: runCost.num_turns };
+      final.log = final.log || [];
+      final.log.push({
+        t: new Date().toTimeString().slice(0, 8),
+        kind: "info",
+        text: `Deploy cost: $${runCost.cost_usd.toFixed(2)} in Claude usage`,
+      });
+    }
+    if (final.status !== "done" && final.status !== "error") {
+      final.status = "error";
+      final.error = `Claude exited (code ${code}${signal ? ", signal " + signal : ""}) before reaching a terminal state. Check ${path.basename(CLAUDE_LOG)} for details.`;
+      final.log = final.log || [];
+      final.log.push({
+        t: new Date().toTimeString().slice(0, 8),
+        kind: "error",
+        text: final.error,
+      });
+    }
     writeJob(final);
   }
   process.exit(code || 0);

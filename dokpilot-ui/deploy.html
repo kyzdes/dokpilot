@@ -153,7 +153,11 @@ window.pageInit = ({ el, icon, badge, toast, DATA, askClaude }) => {
     // LIVE PATH: real job creation + SSE subscription via ui-server.
     // Bypasses the MOCK simulation block below when behind /dokpilot ui.
     if (window.Dok?.live && window.Dok?.api) {
-      return startLiveDeploy(repo);
+      // Capture branch/domain HERE — startLiveDeploy clears the form, so
+      // reading these inputs after that point would always miss them.
+      const branch = document.getElementById("deploy-branch")?.value || "main";
+      const domain = document.getElementById("deploy-domain")?.value || null;
+      return startLiveDeploy(repo, branch, domain);
     }
 
     renderStepper(0, 1);
@@ -242,7 +246,10 @@ window.pageInit = ({ el, icon, badge, toast, DATA, askClaude }) => {
      based on the authoritative job state from the backend.
   */
   let liveES = null;
-  async function startLiveDeploy(repo) {
+  // Remembered for the Retry affordance on a failed/cancelled deploy.
+  let lastSpec = null;
+  async function startLiveDeploy(repo, branch = "main", domain = null) {
+    lastSpec = { repo, branch, domain, server: chosen };
     renderStepper(0, 1);
     wrap.innerHTML = "";
 
@@ -254,7 +261,7 @@ window.pageInit = ({ el, icon, badge, toast, DATA, askClaude }) => {
         badge("building")),
       el("div", { class:"card-pad row wrap", style:{gap:"10px"} },
         el("span", { class:"pill" }, icon("server", 10), "→ " + chosen),
-        el("span", { class:"pill", "data-adv":"" }, icon("branch", 10), "main"),
+        el("span", { class:"pill", "data-adv":"" }, icon("branch", 10), branch),
         headerJobIdSpan));
 
     // Log viewer card
@@ -355,6 +362,9 @@ window.pageInit = ({ el, icon, badge, toast, DATA, askClaude }) => {
         el("div", { class:"codeblock", style:{maxWidth:"480px",margin:"0 auto 20px"} },
           icon("globe", 14), el("span", { class:"grow" }, url),
           el("button", { class:"icon-btn", "data-copy":url, title:"Copy" }, icon("copy", 14))),
+        job.cost_usd != null
+          ? el("p", { class:"hint", style:{margin:"-10px auto 18px"} }, "Cost: $" + Number(job.cost_usd).toFixed(2) + " in Claude usage")
+          : null,
         el("div", { class:"row", style:{justifyContent:"center",gap:"10px"} },
           el("a", { class:"btn btn-primary", href:url, target:"_blank" }, "Open site", icon("ext", 13)),
           el("a", { class:"btn", href:"projects.html" }, "Manage app"),
@@ -364,11 +374,15 @@ window.pageInit = ({ el, icon, badge, toast, DATA, askClaude }) => {
     function renderError(job) {
       if (liveES) { liveES.close(); liveES = null; }
       cursor.remove();
+      const cancelled = /cancel/i.test(job.error || "") || /cancel/i.test(job.result?.error || "");
       const errBanner = el("section", { class:"callout warn mb-4" },
         icon("warn", 15),
-        el("div", null,
-          el("strong", null, "Deploy failed: "),
-          job.error || "see log above for details"));
+        el("div", { class:"grow" },
+          el("strong", null, cancelled ? "Deploy cancelled. " : "Deploy failed: "),
+          cancelled ? "Nothing was created." : (job.error || job.result?.error || "see log above for details"),
+          job.cost_usd != null ? el("div", { class:"hint", style:{marginTop:"4px"} }, "Cost so far: $" + Number(job.cost_usd).toFixed(2)) : null),
+        // Retry re-runs the SAME spec (repo/branch/domain/server) as a fresh job.
+        lastSpec ? el("button", { class:"btn btn-sm", onclick:() => startLiveDeploy(lastSpec.repo, lastSpec.branch, lastSpec.domain) }, icon("refresh", 13), "Retry") : null);
       wrap.insertBefore(errBanner, logCard);
     }
 
@@ -381,8 +395,8 @@ window.pageInit = ({ el, icon, badge, toast, DATA, askClaude }) => {
         body: JSON.stringify({
           repo,
           server: chosen,
-          branch: document.getElementById("deploy-branch")?.value || "main",
-          domain: document.getElementById("deploy-domain")?.value || null,
+          branch,
+          domain,
         }),
       });
       if (res.__error) {
