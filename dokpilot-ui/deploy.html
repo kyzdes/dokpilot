@@ -424,7 +424,19 @@ window.pageInit = ({ el, icon, badge, toast, DATA, askClaude }) => {
     }
   }
 
+  // Pre-fill from URL query (Retry from history page → ?repo=&branch=&domain=&server=).
+  // Apply BEFORE renderForm so the rendered inputs come up already populated;
+  // the user still goes through the plan-confirm gate before any mutation.
+  const qs = new URLSearchParams(location.search);
+  const qRepo = qs.get("repo"), qBranch = qs.get("branch"), qDomain = qs.get("domain"), qServer = qs.get("server");
+  if (qServer) chosen = qServer;
+  if (qDomain) document.documentElement.dataset.mode = "advanced"; // domain input is in advanced view
+
   renderForm();
+
+  if (qRepo)   { const r = document.getElementById("repo");          if (r) r.value = qRepo; }
+  if (qBranch) { const b = document.getElementById("deploy-branch"); if (b) b.value = qBranch; }
+  if (qDomain) { const d = document.getElementById("deploy-domain"); if (d) d.value = qDomain; }
   // re-render stepper on mode change
   new MutationObserver(() => { if (!document.querySelector("#wizard .log-viewer") && !document.querySelector("#wizard h2")) renderStepper(0,0); })
     .observe(document.documentElement, { attributes:true, attributeFilter:["data-mode"] });

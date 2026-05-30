@@ -1,0 +1,244 @@
+<!doctype html>
+<html lang="en" data-mode="simple" data-sidebar="expanded">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dokpilot · History</title>
+<meta name="robots" content="noindex,nofollow">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@400;450;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/app.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 32 32%22><rect width=%2232%22 height=%2232%22 rx=%226%22 fill=%22%2339ff14%22/></svg>">
+</head>
+<body>
+<div class="layout" data-page="history">
+  <aside class="sidebar" data-static>
+    <div class="sb-brand"><button class="sb-glyph" title="Toggle sidebar">d</button><span class="sb-word">dokpilot</span><span class="sb-ver">v4.3.0</span></div>
+    <nav class="sb-nav">
+      <a class="nav-item" href="index.html">Overview</a>
+      <a class="nav-item" href="projects.html">Projects</a>
+      <a class="nav-item active" href="history.html">History</a>
+    </nav>
+  </aside>
+  <div class="content">
+    <header class="topbar" data-static>
+      <div class="topbar-title"><span class="topbar-crumb">dokpilot / history</span><h1 class="topbar-h"><span data-adv>Deploy history</span><span data-simple>Past deploys</span></h1></div>
+    </header>
+    <main class="main">
+      <div class="page-intro">
+        <div class="grow"><p class="page-lead">
+          <span data-adv="">Every deploy you've kicked off — status, log, cost, retry. Job files live in <span class="mono">~/.claude/skills/dokpilot/jobs/</span>.</span>
+          <span data-simple="">Every deploy you've made, with a quick retry.</span>
+        </p></div>
+      </div>
+      <div id="history-root" data-fallback=""><div class="card card-pad"><p class="muted-dash">Loading…</p></div></div>
+    </main>
+  </div>
+</div>
+
+<script src="assets/app.js"></script>
+<script>
+window.pageInit = ({ el, icon, badge, toast, DATA }) => {
+  const root = document.getElementById("history-root");
+  const fmt$ = (n) => "$" + (Number(n) || 0).toFixed(2);
+
+  if (!window.Dok?.live) {
+    root.innerHTML = "";
+    root.append(el("section", { class:"card card-pad" },
+      el("div", { class:"callout" }, icon("terminal", 15),
+        "Deploy history is live when the dashboard is launched via /dokpilot ui.")));
+    return;
+  }
+
+  let filter = "all";  // all | done | error | in-flight
+  const expanded = new Set();
+  let allJobs = [];
+  let stats = null;
+
+  function timeAgo(iso) {
+    if (!iso) return "—";
+    const d = Date.now() - Date.parse(iso);
+    if (isNaN(d)) return "—";
+    const s = Math.floor(d/1000);
+    if (s < 60) return s + "s ago";
+    const m = Math.floor(s/60);
+    if (m < 60) return m + "m ago";
+    const h = Math.floor(m/60);
+    if (h < 24) return h + "h ago";
+    const dy = Math.floor(h/24);
+    if (dy < 7) return dy + "d ago";
+    return new Date(iso).toLocaleDateString();
+  }
+
+  // in-flight = anything not in {done, error}
+  const TERMINAL = new Set(["done", "error"]);
+  function filterJobs() {
+    if (filter === "all")   return allJobs;
+    if (filter === "done")  return allJobs.filter(j => j.status === "done");
+    if (filter === "error") return allJobs.filter(j => j.status === "error");
+    if (filter === "in-flight") return allJobs.filter(j => !TERMINAL.has(j.status));
+    return allJobs;
+  }
+
+  function statusBadge(status) {
+    // Map status to the existing badge palette
+    const map = {
+      "done": "ok",
+      "error": "danger",
+      "pending": "info",
+      "analyzing-stack": "info",
+      "awaiting-answers": "warn",
+      "deploying": "building",
+      "wait-dns": "building",
+      "finalizing": "building",
+    };
+    return badge(map[status] || "info", status);
+  }
+
+  function renderHeader() {
+    const c = stats?.cost || { all_time:0, last_7d:0, last_24h:0 };
+    const n = stats?.count || { last_7d:0, last_24h:0 };
+    const total = stats?.total || 0;
+    return el("section", { class:"card card-pad mb-4", style:{borderColor:"var(--accent-line)"} },
+      el("div", { class:"row wrap", style:{gap:"24px",alignItems:"baseline"} },
+        el("div", null,
+          el("div", { class:"dim-mono", style:{fontSize:"var(--text-sm)"} }, "Total"),
+          el("div", { style:{fontSize:"var(--text-2xl)", fontWeight:"600"} }, String(total) + " deploys")),
+        el("div", null,
+          el("div", { class:"dim-mono", style:{fontSize:"var(--text-sm)"} }, "All-time Claude usage"),
+          el("div", { style:{fontSize:"var(--text-2xl)", fontWeight:"600"} }, "≈" + fmt$(c.all_time))),
+        el("div", null,
+          el("div", { class:"dim-mono", style:{fontSize:"var(--text-sm)"} }, "Last 7 days"),
+          el("div", { style:{fontSize:"var(--text-xl)"} }, "≈" + fmt$(c.last_7d) + " · " + n.last_7d + " deploys")),
+        el("div", null,
+          el("div", { class:"dim-mono", style:{fontSize:"var(--text-sm)"} }, "Last 24 h"),
+          el("div", { style:{fontSize:"var(--text-xl)"} }, "≈" + fmt$(c.last_24h) + " · " + n.last_24h + " deploys"))));
+  }
+
+  function renderFilterBar() {
+    const opts = [
+      { key:"all",        label:"All"        },
+      { key:"done",       label:"Done"       },
+      { key:"error",      label:"Failed"     },
+      { key:"in-flight",  label:"In-flight"  },
+    ];
+    return el("div", { class:"row", style:{gap:"6px", marginBottom:"12px"} },
+      ...opts.map(o => el("button", {
+        class: "btn btn-sm" + (filter === o.key ? " btn-primary" : ""),
+        onclick: () => { filter = o.key; render(); },
+      }, o.label)));
+  }
+
+  function renderExpanded(job) {
+    // `job` here is the FULL job (passed in as job._full from the row), so
+    // read fields directly. Earlier we double-indirected `job._full?.log` —
+    // worked out as undefined → empty log on every expand.
+    const log = job.log || [];
+    const recent = log.slice(-50); // cap to last 50 lines for the inline view
+    const url = job.result?.url;
+    const err = job.error || job.result?.error;
+    return el("div", { class:"card-pad", style:{borderTop:"1px solid var(--border)", background:"var(--bg-2)"} },
+      err ? el("div", { class:"callout warn mb-3" }, icon("warn",14), el("span", null, err)) : null,
+      url ? el("div", { class:"row mb-3", style:{gap:"8px",alignItems:"center"} },
+        icon("globe",13), el("a", { href:url, target:"_blank", class:"mono" }, url)) : null,
+      el("div", { class:"dim-mono mb-2", style:{fontSize:"var(--text-sm)"} },
+        "log (last " + recent.length + " of " + log.length + ")"),
+      el("pre", { class:"log-viewer mono", style:{maxHeight:"260px"} },
+        ...recent.map(l => el("div", { class:"log-line log-kind-" + (l.kind||"info") },
+          el("span", { class:"log-t" }, l.t || "·"),
+          el("span", { class:"log-text" }, l.text || "")))),
+      el("div", { class:"row", style:{gap:"8px", marginTop:"12px"} },
+        el("button", {
+          class:"btn btn-sm btn-primary",
+          onclick: () => retryDeploy(job),
+        }, icon("refresh",13), "Retry deploy"),
+        el("button", {
+          class:"btn btn-sm btn-danger",
+          onclick: () => deleteJob(job),
+        }, icon("trash",13), "Delete")));
+  }
+
+  async function retryDeploy(job) {
+    // Pre-fill the deploy form via URL params and let the user re-confirm
+    // through the plan gate (safer than firing a new job behind the scenes).
+    const qs = new URLSearchParams();
+    if (job.repo)   qs.set("repo",   job.repo);
+    if (job.branch) qs.set("branch", job.branch);
+    if (job.domain) qs.set("domain", job.domain);
+    if (job.server) qs.set("server", job.server);
+    location.href = "deploy.html?" + qs.toString();
+  }
+
+  async function deleteJob(job) {
+    if (!confirm("Delete job " + job.id + "? Removes the job file + claude.log.")) return;
+    const res = await window.Dok.api("/api/jobs/" + encodeURIComponent(job.id), {
+      method: "DELETE",
+      headers: { "X-CSRF": window.__DOKPILOT_TOKEN__ },
+    });
+    if (res?.__error) { toast("Delete failed: " + (res.message||"HTTP "+res.status), "warn"); return; }
+    expanded.delete(job.id);
+    toast("Job deleted", "trash");
+    await load();
+  }
+
+  function renderRow(job) {
+    const isExp = expanded.has(job.id);
+    const head = el("div", { class:"lrow", style:{gridTemplateColumns:"auto 1fr auto auto auto auto",cursor:"pointer",alignItems:"center"},
+      onclick: async () => {
+        if (isExp) { expanded.delete(job.id); render(); return; }
+        // Fetch the full job (log lives there, not in the list)
+        const r = await window.Dok.api("/api/jobs/" + job.id);
+        job._full = r?.job;
+        expanded.add(job.id); render();
+      } },
+      statusBadge(job.status),
+      el("div", { class:"grow" },
+        el("span", { class:"mono", style:{fontSize:"var(--text-base)"} }, job.repo || "(no repo)"),
+        el("div", { class:"dim-mono", style:{fontSize:"var(--text-sm)",marginTop:"2px"} },
+          (job.server || "—") + (job.branch ? " · " + job.branch : "") + (job.domain ? " · " + job.domain : ""))),
+      el("span", { class:"dim-mono", style:{fontSize:"var(--text-sm)"} }, timeAgo(job.created_at)),
+      el("span", { class:"mono", style:{fontSize:"var(--text-sm)",minWidth:"56px",textAlign:"right"} },
+        job.cost_usd != null ? "≈" + fmt$(job.cost_usd) : "—"),
+      el("span", { class:"dim-mono mono", style:{fontSize:"var(--text-xs)"} }, job.id.slice(0,12)),
+      el("span", { style:{display:"inline-flex", transform: isExp ? "rotate(90deg)" : "none", transition:"transform .15s"} }, icon("chevron", 13)));
+    return el("div", { class:"history-row" }, head, isExp && job._full ? renderExpanded(job._full) : null);
+  }
+
+  function renderList() {
+    const jobs = filterJobs();
+    if (!jobs.length) {
+      return el("section", { class:"card card-pad" },
+        el("p", { class:"muted-dash" }, filter === "all"
+          ? "No deploys yet. Kick one off from the Deploy page."
+          : "No " + filter + " deploys."));
+    }
+    return el("section", { class:"card" },
+      el("div", { class:"card-head" },
+        el("h3", null, "Deploys"),
+        el("span", { class:"dim-mono mono", style:{fontSize:"var(--text-sm)"} },
+          jobs.length + " of " + (stats?.total || 0))),
+      ...jobs.map(renderRow));
+  }
+
+  function render() {
+    root.innerHTML = "";
+    root.append(renderHeader(), renderFilterBar(), renderList());
+  }
+
+  async function load() {
+    const [listRes, statsRes] = await Promise.all([
+      window.Dok.api("/api/jobs?limit=200"),
+      window.Dok.api("/api/jobs/stats"),
+    ]);
+    if (listRes?.__error) { toast("Failed to load jobs", "warn"); return; }
+    allJobs = listRes.jobs || [];
+    stats   = statsRes?.__error ? null : statsRes;
+    render();
+  }
+
+  load();
+};
+</script>
+</body>
+</html>

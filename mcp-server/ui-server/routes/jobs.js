@@ -54,11 +54,17 @@ function readBody(req, max = 64 * 1024) {
   });
 }
 
-/* GET /api/jobs — list all jobs (read-only) */
+/* GET /api/jobs?status=&limit= — list jobs (newest first).
+   Backs the deploy-history page. status accepts a CSV ("done,error") or a
+   single value; limit caps the result (default 100). cost_usd is included so
+   the history list can show usage per row without a per-job fetch. */
 function listAll(req, res) {
-  const jobs = listJobs().sort((a, b) => (b.created_at || "").localeCompare(a.created_at || ""));
+  const all = listJobs().sort((a, b) => (b.created_at || "").localeCompare(a.created_at || ""));
+  const wanted = (req.query?.status || "").split(",").map((s) => s.trim()).filter(Boolean);
+  const lim = Math.max(1, Math.min(500, Number(req.query?.limit) || 100));
+  const filtered = wanted.length ? all.filter((j) => wanted.includes(j.status)) : all;
   json(res, 200, {
-    jobs: jobs.map((j) => ({
+    jobs: filtered.slice(0, lim).map((j) => ({
       id: j.id,
       status: j.status,
       repo: j.repo,
@@ -68,9 +74,63 @@ function listAll(req, res) {
       created_at: j.created_at,
       updated_at: j.updated_at,
       result: j.result,
+      error: j.error,
+      cost_usd: j.cost_usd,
     })),
-    count: jobs.length,
+    count: filtered.length,
+    total: all.length,
   });
+}
+
+/* GET /api/jobs/stats — rollups for the history page header
+   (cost + count over all-time / 7d / 24h, plus by-status). */
+function jobsStats(req, res) {
+  const all = listJobs();
+  const now = Date.now();
+  const DAY = 24 * 3600 * 1000;
+  const stats = {
+    total: all.length,
+    by_status: {},
+    cost: { all_time: 0, last_7d: 0, last_24h: 0 },
+    count: { last_7d: 0, last_24h: 0 },
+    earliest: null,
+    latest: null,
+  };
+  for (const j of all) {
+    stats.by_status[j.status] = (stats.by_status[j.status] || 0) + 1;
+    const c = typeof j.cost_usd === "number" ? j.cost_usd : 0;
+    stats.cost.all_time += c;
+    if (j.created_at) {
+      const t = Date.parse(j.created_at);
+      if (!stats.earliest || j.created_at < stats.earliest) stats.earliest = j.created_at;
+      if (!stats.latest   || j.created_at > stats.latest)   stats.latest   = j.created_at;
+      const age = now - t;
+      if (age <= 7 * DAY) { stats.cost.last_7d += c; stats.count.last_7d += 1; }
+      if (age <= 1 * DAY) { stats.cost.last_24h += c; stats.count.last_24h += 1; }
+    }
+  }
+  // 2-decimal cents for display sanity
+  stats.cost.all_time = Math.round(stats.cost.all_time * 100) / 100;
+  stats.cost.last_7d  = Math.round(stats.cost.last_7d  * 100) / 100;
+  stats.cost.last_24h = Math.round(stats.cost.last_24h * 100) / 100;
+  json(res, 200, stats);
+}
+
+/* DELETE /api/jobs/:id — remove the job's persisted state (job.json + the
+   matching claude.log). Used by the history page Delete action. Idempotent;
+   if the files don't exist, returns 200 with deleted:false. */
+function deleteJob(req, res, ctx, params) {
+  if (!csrf.check(req, ctx.token)) return json(res, 403, { error: "csrf" });
+  let removed = 0;
+  try {
+    const p = jobPath(params.id);
+    if (fs.existsSync(p)) { fs.unlinkSync(p); removed++; }
+    const log = p.replace(/\.json$/, ".claude.log");
+    if (fs.existsSync(log)) { fs.unlinkSync(log); removed++; }
+  } catch (e) {
+    return json(res, 500, { error: "delete-failed", message: e.message });
+  }
+  json(res, 200, { deleted: removed > 0, id: params.id, files_removed: removed });
 }
 
 /* POST /api/jobs/deploy — create a new deploy job */
@@ -204,8 +264,10 @@ function getCsrf(req, res, ctx) {
 module.exports = {
   "GET /api/csrf":             getCsrf,
   "GET /api/jobs":             listAll,
+  "GET /api/jobs/stats":       jobsStats,
   "POST /api/jobs/deploy":     createDeploy,
   "GET /api/jobs/:id":         getJob,
   "POST /api/jobs/:id/answer": postAnswer,
+  "DELETE /api/jobs/:id":      deleteJob,
   "GET /api/jobs/:id/stream":  streamJob,
 };
