@@ -4,6 +4,98 @@ All notable changes to Dokpilot are documented in this file.
 
 ---
 
+## v4.3.0 — 2026-05-30
+
+Hardening + deploy reliability. First real e2e deploys ran and exposed that
+several M1/M2 write paths shipped as "Done" had never actually been
+exercised against a real Dokploy v0.29+ server. This release fixes them.
+
+### Added — Safety + recovery
+
+- **Plan-then-confirm gate (H1)** — worker now always emits a plan and blocks
+  on `ask-user.sh confirm "Deploy this plan?"` before any mutating Dokploy
+  call. Cancel → no resources created.
+- **Cost-guard (KYZ-239 A)** — worker parses `total_cost_usd` from the
+  Claude stream-json `result` and persists `job.cost_usd`. Done/error cards
+  show "≈$X Claude usage (on your plan)". The cost is a subscription
+  usage gauge, not per-deploy billing.
+- **Retry/recovery (KYZ-239 B)** — failed and cancelled deploy cards have a
+  **Retry** button that re-runs the same `{repo, branch, domain, server}`
+  as a fresh job. Also fixed a bug where `startLiveDeploy` cleared the form
+  *before* reading `#deploy-branch`/`#deploy-domain`, silently dropping
+  custom branch/domain on the live path.
+- **Delete app + project (H3)** — `POST /api/apps/:id/delete` +
+  `POST /api/projects/:id/delete` (was previously CLI-only).
+
+### Added — Onboarding + tooling
+
+- **`dokpilot-ui/assets/deploy-flow.js`** — shared live-deploy plumbing
+  (`window.DokFlow.{logLine, subscribeJob, postAnswers}`); `deploy.html` and
+  `onboarding.html` both route through it. New `onCost` hook delivers the
+  trailing cost write to terminal cards.
+- **Functional CI** — `node --check` on every ui-server JS + every inline
+  `<script>` (`scripts/check-inline-scripts.sh`), `shellcheck`, and
+  `smoke.js --ci` mode. Added `server.js --no-state` so CI doesn't clobber
+  the launcher's `.ui-url`.
+
+### Fixed — Dokploy v0.29+ drift (the "shared providers" field-expansion family)
+
+- **G-016** — GitHub App id is nested at `.github.githubId` (top-level is
+  null). `saveGithubProvider` 500'd on every GitHub-App deploy. All 3
+  reference jq snippets now read nested-first with a top-level fallback.
+- **KI-023** — `application.reload` requires `appName` (KYZ-104 graceful
+  restart). Dedicated `reloadApp()` fetches `application.one` for `appName`
+  first.
+- **KI-022** — Many Dokploy mutations ack with an empty body on success
+  (`application.redeploy`, `killBuild`, `cleanQueues`, `application.deploy`).
+  `dokploy()` was JSON-parsing the empty string and reporting a spurious
+  `__error: non-json response`. Empty stdout on `code=0` is now treated as
+  `{ ok: true }`. Single fix unblocked redeploy / kill-build (KYZ-102) /
+  clean-queue.
+- **KI-013 buildkit** — resolved on `main` via `docker builder prune -af`
+  (2.4 GB stuck cache; zero downtime, no daemon restart).
+- **KI-014 worker AskUserQuestion** — `--disallowedTools AskUserQuestion`
+  + prompt rule. Worker now asks only via `ask-user.sh`.
+- **KI-016 worker timeout** — `WORKER_TIMEOUT_MS` 20 → 40 min; the prompt
+  polls `deployment.all` to a terminal state and marks `done` promptly.
+- **KI-018 ask-user.sh jq precedence** — `(... | map(...)) + [$q]`.
+- **KI-019 worker permission-mode** — `--permission-mode bypassPermissions`.
+- **KI-020 worker lingered ~65 s after `done`** writing a summary + editing
+  notes. Prompt rule **STOP after `set-result`**: end the turn the instant
+  `set-result` returns. Faster cost capture + less usage.
+
+### Fixed — Cost-delivery race
+
+- `routes/jobs.js` holds the job SSE stream open until `cost_usd` lands or
+  an 8 s grace cap, instead of closing 500 ms after terminal.
+- `subscribeJob` fires `onDone`/`onError` once and then keeps listening for
+  the trailing `cost_usd`; pages re-render the terminal card via `onCost`.
+- Bounded fallback poll (≤13 GETs over ~65 s) in case the SSE closes
+  before the worker process exits.
+
+### Verified live
+
+- Next.js (nixpacks) `dokpilot-landing`, Python/Flask (Dockerfile)
+  `pen-slides-converter`, static `keeper-ui` — all GREEN end-to-end.
+  `md2pdf`'s 1-service compose correctly degraded to a Dockerfile deploy
+  and surfaced a clean actionable error on a real repo bug (`markdown==3.7.1`
+  not on PyPI), exercising the error card + Retry + cost-on-error.
+- Every M2 destructive write exercised live against a throwaway: stop,
+  restart, reload, redeploy, kill-build, clean-queue, delete (app +
+  project), domain.create, domain.delete, rollbacks list (correctly
+  reports `rollback_active:false` — no registry).
+
+### Deferred
+
+- **KYZ-245** — multi-service docker-compose (the **Dokploy Compose API**
+  path) was never exercised; the one compose repo tried was a 1-service
+  wrapper. Needs a self-contained multi-service repo.
+- **G-017** — `application.cancelDeployment` is cloud-only on Dokploy.
+  Self-hosted UI button should be hidden.
+- **G-018** — `application.saveBuildType` now requires `railpackVersion`;
+  `application.deploy` rejects null `title`/`description`. Reference
+  snippets need a sweep.
+
 ## v4.2.0 — 2026-05-28
 
 ### Added — Guided first-deploy onboarding (CJM)
