@@ -198,6 +198,35 @@ async function createDatabase(req, res, ctx) {
 }
 
 /**
+ * POST /api/apps/:id/reload   Body: { server, kind? }
+ * Graceful restart (KYZ-104). Dokploy v0.29+ requires appName too — we fetch
+ * application.one first (KYZ-240, mirrors KI-012/G-016 family). Compose paths
+ * use compose.reload which only needs composeId.
+ */
+async function reloadApp(req, res, ctx, params) {
+  if (!csrf.check(req, ctx.token)) return json(res, 403, { error: "csrf" });
+  let body; try { body = await readBody(req); } catch (e) { return json(res, e.code || 400, { error: e.message }); }
+  const server = body?.server || req.query?.server;
+  const kind = body?.kind || "application";
+  if (!server) return json(res, 400, { error: "missing-server" });
+
+  if (kind === "compose") {
+    const r = await dokploy(server, "POST", "compose.reload", { composeId: params.id });
+    if (r.__error) return json(res, 502, { error: "dokploy-failed", ...r });
+    return json(res, 200, { action: "reload", app_id: params.id, kind, server, response: r });
+  }
+
+  const app = await dokploy(server, "GET", `application.one?applicationId=${encodeURIComponent(params.id)}`);
+  if (app.__error) return json(res, 502, { error: "lookup-failed", ...app });
+  const appName = app.appName;
+  if (!appName) return json(res, 502, { error: "no-appName", note: "application.one returned no appName" });
+
+  const r = await dokploy(server, "POST", "application.reload", { applicationId: params.id, appName });
+  if (r.__error) return json(res, 502, { error: "dokploy-failed", ...r });
+  json(res, 200, { action: "reload", app_id: params.id, kind, server, response: r });
+}
+
+/**
  * POST /api/projects/:id/delete   Body: { server }
  * Removes a Dokploy project (and its apps). H3 (v4.3) — closes the
  * cleanup gap (previously only doable via the CLI).
@@ -217,7 +246,7 @@ module.exports = {
   "POST /api/apps/:id/redeploy":     makeAppAction("redeploy"),
   "POST /api/apps/:id/restart":      makeAppAction("restart"),
   "POST /api/apps/:id/stop":         makeAppAction("stop"),
-  "POST /api/apps/:id/reload":       makeAppAction("reload"),          // KYZ-104
+  "POST /api/apps/:id/reload":       reloadApp,                        // KYZ-104 (needs appName, KYZ-240)
   "POST /api/apps/:id/kill-build":   makeAppAction("kill-build"),      // KYZ-102
   "POST /api/apps/:id/cancel-deploy":makeAppAction("cancel-deploy"),   // KYZ-102
   "POST /api/apps/:id/clean-queue":  makeAppAction("clean-queue"),     // KYZ-102

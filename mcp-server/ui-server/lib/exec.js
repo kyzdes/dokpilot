@@ -62,6 +62,10 @@ async function dokploy(server, method, endpoint, body) {
   if (code !== 0) {
     return { __error: true, code, stderr: stderr.slice(0, 800), timedOut };
   }
+  // Many Dokploy mutations (application.redeploy, killBuild, cleanQueues,
+  // application.deploy, …) acknowledge with an empty body on success. Treat
+  // that as { ok: true } so callers don't see a spurious "non-json response".
+  if (!stdout.trim()) return { ok: true };
   try {
     return JSON.parse(stdout);
   } catch (e) {
