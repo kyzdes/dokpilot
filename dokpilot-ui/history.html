@@ -101,19 +101,87 @@ window.pageInit = ({ el, icon, badge, toast, DATA }) => {
     const n = stats?.count || { last_7d:0, last_24h:0 };
     const total = stats?.total || 0;
     return el("section", { class:"card card-pad mb-4", style:{borderColor:"var(--accent-line)"} },
-      el("div", { class:"row wrap", style:{gap:"24px",alignItems:"baseline"} },
-        el("div", null,
-          el("div", { class:"dim-mono", style:{fontSize:"var(--text-sm)"} }, "Total"),
-          el("div", { style:{fontSize:"var(--text-2xl)", fontWeight:"600"} }, String(total) + " deploys")),
-        el("div", null,
-          el("div", { class:"dim-mono", style:{fontSize:"var(--text-sm)"} }, "All-time Claude usage"),
-          el("div", { style:{fontSize:"var(--text-2xl)", fontWeight:"600"} }, "≈" + fmt$(c.all_time))),
-        el("div", null,
-          el("div", { class:"dim-mono", style:{fontSize:"var(--text-sm)"} }, "Last 7 days"),
-          el("div", { style:{fontSize:"var(--text-xl)"} }, "≈" + fmt$(c.last_7d) + " · " + n.last_7d + " deploys")),
-        el("div", null,
-          el("div", { class:"dim-mono", style:{fontSize:"var(--text-sm)"} }, "Last 24 h"),
-          el("div", { style:{fontSize:"var(--text-xl)"} }, "≈" + fmt$(c.last_24h) + " · " + n.last_24h + " deploys"))));
+      el("div", { class:"row-between wrap" },
+        el("div", { class:"row wrap", style:{gap:"24px",alignItems:"baseline"} },
+          el("div", null,
+            el("div", { class:"dim-mono", style:{fontSize:"var(--text-sm)"} }, "Total"),
+            el("div", { style:{fontSize:"var(--text-2xl)", fontWeight:"600"} }, String(total) + " deploys")),
+          el("div", null,
+            el("div", { class:"dim-mono", style:{fontSize:"var(--text-sm)"} }, "All-time Claude usage"),
+            el("div", { style:{fontSize:"var(--text-2xl)", fontWeight:"600"} }, "≈" + fmt$(c.all_time))),
+          el("div", null,
+            el("div", { class:"dim-mono", style:{fontSize:"var(--text-sm)"} }, "Last 7 days"),
+            el("div", { style:{fontSize:"var(--text-xl)"} }, "≈" + fmt$(c.last_7d) + " · " + n.last_7d + " deploys")),
+          el("div", null,
+            el("div", { class:"dim-mono", style:{fontSize:"var(--text-sm)"} }, "Last 24 h"),
+            el("div", { style:{fontSize:"var(--text-xl)"} }, "≈" + fmt$(c.last_24h) + " · " + n.last_24h + " deploys"))),
+        el("button", { class:"btn btn-sm", onclick: openPruneModal, title:"Bulk-delete old finished jobs" },
+          icon("trash", 13), "Prune…")));
+  }
+
+  // ── Prune modal (KYZ-251) ──────────────────────────────────────────
+  async function callPrune(policy, dryRun) {
+    return await window.Dok.api("/api/jobs/prune", {
+      method: "POST",
+      headers: { "Content-Type":"application/json", "X-CSRF": window.__DOKPILOT_TOKEN__ },
+      body: JSON.stringify({ policy, dry_run: dryRun }),
+    });
+  }
+
+  function openPruneModal() {
+    const inputs = {};
+    const field = (key, label, def, hint) => el("div", { class:"field" },
+      el("label", null, label),
+      (inputs[key] = el("input", { type:"number", min:"0", class:"input mono", value: String(def) })),
+      hint ? el("div", { class:"hint" }, hint) : null);
+
+    const previewEl = el("div", { class:"dim-mono mono mt-3", style:{fontSize:"var(--text-sm)"} }, "Run preview to see what would be deleted.");
+    const confirmBtn = el("button", { class:"btn btn-danger", disabled:"true", onclick: async () => {
+      const pol = readPolicy();
+      const r = await callPrune(pol, false);
+      if (r?.__error) { toast("Prune failed: "+(r.message||"HTTP "+r.status), "warn"); return; }
+      overlay.remove();
+      toast("Pruned " + (r.delete?.length || 0) + " job(s) · " + (r.files_removed || 0) + " files", "trash");
+      await load();
+    } }, "Delete selected");
+    const previewBtn = el("button", { class:"btn", onclick: async () => {
+      const pol = readPolicy();
+      const r = await callPrune(pol, true);
+      if (r?.__error) { previewEl.textContent = "Preview failed: "+(r.message||"HTTP "+r.status); return; }
+      const n = r.delete?.length || 0;
+      previewEl.innerHTML = "";
+      previewEl.append(
+        el("div", null, "Would delete ", el("strong", null, String(n)), " job(s), keep ", String(r.keep?.length || 0), "."),
+        n > 0 ? el("div", { class:"mt-2", style:{maxHeight:"160px",overflow:"auto"} },
+          ...r.delete.slice(0, 50).map(id => el("div", null, "· " + id))) : null);
+      confirmBtn.disabled = n > 0 ? null : "true";
+      confirmBtn.textContent = "Delete " + n + " job" + (n === 1 ? "" : "s");
+    } }, "Preview");
+
+    function readPolicy() {
+      return {
+        keep_recent_done:  Math.max(0, Number(inputs.keep_recent_done.value)  || 0),
+        keep_recent_error: Math.max(0, Number(inputs.keep_recent_error.value) || 0),
+        older_than_days:   Math.max(0, Number(inputs.older_than_days.value)   || 0),
+      };
+    }
+
+    const overlay = el("div", { class:"overlay", onclick:(e)=>{ if(e.target===overlay) overlay.remove(); } },
+      el("div", { class:"modal" },
+        el("div", { class:"modal-head" },
+          el("h3", null, "Prune jobs"),
+          el("button", { class:"icon-btn", onclick:()=>overlay.remove() }, icon("x",16))),
+        el("div", { class:"modal-body" },
+          el("p", { class:"page-lead" }, "Bulk-delete old finished deploys. In-flight jobs are never selected. Hit Preview first."),
+          field("keep_recent_done",  "Keep last N successful",  30),
+          field("keep_recent_error", "Keep last N failed",      20),
+          field("older_than_days",   "Also delete older than (days, 0 = ignore)", 0),
+          previewEl),
+        el("div", { class:"modal-foot row", style:{gap:"8px",justifyContent:"flex-end"} },
+          el("button", { class:"btn btn-ghost", onclick:()=>overlay.remove() }, "Cancel"),
+          previewBtn,
+          confirmBtn)));
+    document.body.append(overlay);
   }
 
   function renderFilterBar() {

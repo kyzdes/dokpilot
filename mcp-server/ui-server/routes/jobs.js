@@ -7,6 +7,7 @@ const { openStream, pingInterval } = require("../lib/sse");
 const csrf = require("../lib/csrf");
 const {
   JOBS_DIR, jobPath, readJob, createJob, answerQuestion, listJobs,
+  planPrune, executePrune,
 } = require("../lib/jobs");
 const { listServerNames } = require("../lib/exec");
 
@@ -114,6 +115,23 @@ function jobsStats(req, res) {
   stats.cost.last_7d  = Math.round(stats.cost.last_7d  * 100) / 100;
   stats.cost.last_24h = Math.round(stats.cost.last_24h * 100) / 100;
   json(res, 200, stats);
+}
+
+/* POST /api/jobs/prune — preview or apply a prune policy to the jobs dir.
+   Body: { policy?, dry_run? } — defaults: dry_run=true (preview only).
+   Returns the same plan shape whether dry-run or not, plus files_removed
+   when applied. CSRF-gated. In-flight jobs are never selected. */
+async function prune(req, res, ctx) {
+  if (!csrf.check(req, ctx.token)) return json(res, 403, { error: "csrf" });
+  let body;
+  try { body = await readBody(req); }
+  catch (e) { return json(res, e.code || 400, { error: e.message }); }
+  const policy = body?.policy || {};
+  const dryRun = body?.dry_run !== false; // default true for safety
+  const plan = planPrune(policy);
+  if (dryRun) return json(res, 200, { dry_run: true, ...plan });
+  const files_removed = executePrune(plan.delete);
+  json(res, 200, { dry_run: false, files_removed, ...plan });
 }
 
 /* DELETE /api/jobs/:id — remove the job's persisted state (job.json + the
@@ -266,6 +284,7 @@ module.exports = {
   "GET /api/jobs":             listAll,
   "GET /api/jobs/stats":       jobsStats,
   "POST /api/jobs/deploy":     createDeploy,
+  "POST /api/jobs/prune":      prune,
   "GET /api/jobs/:id":         getJob,
   "POST /api/jobs/:id/answer": postAnswer,
   "DELETE /api/jobs/:id":      deleteJob,

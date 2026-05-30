@@ -135,6 +135,66 @@ function answerQuestion(id, questionId, answer) {
   });
 }
 
+/**
+ * Decide which jobs the prune policy would remove from the jobs dir.
+ *
+ * Policy:
+ *   keep_recent_done   keep at most this many of the most recent done jobs
+ *   keep_recent_error  keep at most this many of the most recent error jobs
+ *   older_than_days    anything older than this is eligible for deletion
+ *                      regardless of the keep-recent counts (0 = ignore age)
+ *
+ * In-flight (non-terminal) jobs are NEVER deleted — a worker may be writing.
+ *
+ * Returns `{ delete, keep }` arrays of job IDs without touching disk; the
+ * caller decides whether to execute (POST /api/jobs/prune `?dry_run=1`).
+ */
+function planPrune(policy) {
+  const p = {
+    keep_recent_done:  Number.isFinite(+policy?.keep_recent_done)  ? +policy.keep_recent_done  : 30,
+    keep_recent_error: Number.isFinite(+policy?.keep_recent_error) ? +policy.keep_recent_error : 20,
+    older_than_days:   Number.isFinite(+policy?.older_than_days)   ? +policy.older_than_days   : 0,
+  };
+  const all = listJobs().sort((a, b) => (b.created_at || "").localeCompare(a.created_at || ""));
+  const TERMINAL = new Set(["done", "error"]);
+  const cutoff = p.older_than_days > 0 ? Date.now() - p.older_than_days * 24 * 3600 * 1000 : -Infinity;
+
+  let doneKept = 0, errorKept = 0;
+  const del = [];
+  const keep = [];
+  for (const j of all) {
+    if (!TERMINAL.has(j.status)) { keep.push(j.id); continue; } // in-flight — never delete
+    const ageMs = j.created_at ? Date.now() - Date.parse(j.created_at) : 0;
+    const tooOld = j.created_at && Date.parse(j.created_at) < cutoff;
+    if (tooOld) { del.push(j.id); continue; }
+    if (j.status === "done") {
+      if (doneKept < p.keep_recent_done) { keep.push(j.id); doneKept++; }
+      else del.push(j.id);
+    } else { // error
+      if (errorKept < p.keep_recent_error) { keep.push(j.id); errorKept++; }
+      else del.push(j.id);
+    }
+  }
+  return { delete: del, keep, policy: p };
+}
+
+/**
+ * Execute a plan: delete job.json + matching claude.log for each id.
+ * Skips ids that don't exist (idempotent). Returns the count of files removed.
+ */
+function executePrune(ids) {
+  let files = 0;
+  for (const id of ids) {
+    try {
+      const p = jobPath(id);
+      if (fs.existsSync(p)) { fs.unlinkSync(p); files++; }
+      const log = p.replace(/\.json$/, ".claude.log");
+      if (fs.existsSync(log)) { fs.unlinkSync(log); files++; }
+    } catch (e) { /* keep going; the route summarises */ }
+  }
+  return files;
+}
+
 module.exports = {
   JOBS_DIR,
   jobPath,
@@ -145,4 +205,6 @@ module.exports = {
   createJob,
   patchJob,
   answerQuestion,
+  planPrune,
+  executePrune,
 };
