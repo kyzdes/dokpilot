@@ -102,8 +102,10 @@ window.pageInit = ({ el, icon, badge, toast, DATA, askClaude }) => {
       el("div", null, el("span", { class:"mono", style:{fontSize:"var(--text-base)"} }, q.title || q.app_id || "(deploy)"),
         el("div", { class:"dim-mono", style:{marginTop:"3px",fontSize:"var(--text-sm)"} }, q.server + " · " + q.kind)),
       el("div", { class:"row", style:{gap:"6px"} },
-        q.app_id ? el("button", { class:"btn btn-sm btn-danger", onclick: abort(q, "kill-build", "Build killed") }, "Kill build") : null,
-        q.app_id ? el("button", { class:"btn btn-sm", onclick: abort(q, "cancel-deploy", "Deploy cancelled") }, "Cancel") : null)));
+        // G-017: application.cancelDeployment is Dokploy CLOUD-ONLY (self-hosted
+        // returns "Deployment cancellation only available in cloud version").
+        // Kill build is the supported abort path on self-hosted.
+        q.app_id ? el("button", { class:"btn btn-sm btn-danger", onclick: abort(q, "kill-build", "Build killed") }, "Kill build") : null)));
     queueBanner.append(el("section", { class:"card card-pad", style:{marginBottom:"16px"} },
       el("div", { class:"row-between mb-3" },
         el("div", { class:"row", style:{gap:"8px"} }, icon("deploy",15), el("strong",null,"Deploy queue"), badge("building")),

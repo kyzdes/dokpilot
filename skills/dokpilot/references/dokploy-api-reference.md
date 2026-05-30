@@ -879,7 +879,8 @@ bash scripts/dokploy-api.sh main POST domain.create '{
 }'
 
 # 12. Deploy
-bash scripts/dokploy-api.sh main POST application.deploy '{"applicationId":"'"$APP_ID"'"}'
+# v0.29+ (G-018): title + description are REQUIRED strings (not null). Empty desc OK.
+bash scripts/dokploy-api.sh main POST application.deploy '{"applicationId":"'"$APP_ID"'","title":"Manual deploy","description":""}'
 ```
 
 ### Create a Compose project with raw YAML

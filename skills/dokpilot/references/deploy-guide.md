@@ -1,5 +1,15 @@
 # Deploy Guide — Деплой проекта из GitHub
 
+> **Dokploy v0.29+ field-expansion family.** В v0.29 Dokploy расширил Zod-схемы по многим мутациям — где раньше хватало `applicationId`, теперь требуются дополнительные поля. Это уже укусило нас несколько раз:
+>
+> - **KI-003 / G-018:** `application.saveBuildType` — требует ВСЕ 7 полей (`dockerfile`, `dockerContextPath`, `dockerBuildStage`, `herokuVersion`, `railpackVersion`, `publishDirectory`, `isStaticSpa`) даже для nixpacks/static. Шли filler-значения (`herokuVersion:"24"`, `railpackVersion:"0.15.4"`, остальные `null`).
+> - **G-016 / KI-012:** `gitProvider.getAll` — GitHub App id вложен в `.github.githubId` (top-level `.githubId` = null). Читай nested-first: `[...][0] | (.github.githubId // .githubId) // empty`.
+> - **KI-023:** `application.reload` — нужны `applicationId` И `appName` (раньше только id). Делай `application.one` перед reload-ом.
+> - **G-018:** `application.deploy` — `title` и `description` обязательны как СТРОКИ (не null). Empty `""` для description ОК.
+> - **KI-022:** Многие мутации (`redeploy`, `killBuild`, `cleanQueues`, `application.deploy`) ACK-ают пустым телом на успехе — это НЕ ошибка. Хелпер `dokploy()` уже трактует пустоту как `{ok:true}`.
+>
+> Если новая ручка возвращает Zod-error `expected nonoptional, received undefined` — это та же семья. Проверь Dokploy router source или просто добавь requested поле с разумным default.
+
 Этот гайд вызывается при команде `/dokpilot deploy <github-url> [--domain <domain>] [--server <name>] [--branch <branch>]`.
 
 Цель: Задеплоить проект из GitHub-репозитория на VPS с автоматическим определением стека, настройкой env-переменных, DNS и SSL.
@@ -558,11 +568,13 @@ bash scripts/dokploy-api.sh "$SERVER" POST domain.create '{
 
 ```bash
 bash scripts/dokploy-api.sh "$SERVER" POST application.deploy '{
-  "applicationId": "'"$APP_ID"'"
+  "applicationId": "'"$APP_ID"'",
+  "title": "Manual deploy",
+  "description": ""
 }'
 ```
 
-Ответ содержит `deploymentId`.
+> **v0.29+ (G-018):** `title` и `description` обязательны и **должны быть строками** (не `null`, не отсутствовать). Empty string `""` для description ОК. Часть семейства KI-012/G-016/KI-023 — Dokploy v0.29+ расширил required-set в Zod-схемах. Ответ — пустое тело (success) или JSON с `deploymentId`; `dokploy()` хелпер трактует пустоту как `{ok:true}` (KI-022).
 
 ### 3.10 Мониторинг деплоя
 

@@ -89,9 +89,10 @@ Use `application.deploy` or `application.redeploy` only when:
 
 ```bash
 # Manual deploy (fresh build from repo)
-bash scripts/dokploy-api.sh <server> POST application.deploy '{"applicationId":"<id>"}'
+# v0.29+ (G-018): application.deploy needs title + description as STRINGS (not null).
+bash scripts/dokploy-api.sh <server> POST application.deploy '{"applicationId":"<id>","title":"Manual deploy","description":""}'
 
-# Redeploy (rebuild + restart)
+# Redeploy (rebuild + restart) — accepts bare {applicationId}
 bash scripts/dokploy-api.sh <server> POST application.redeploy '{"applicationId":"<id>"}'
 ```
 
